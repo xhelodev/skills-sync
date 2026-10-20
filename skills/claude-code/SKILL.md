@@ -1,6 +1,6 @@
 ---
 name: claude-code
-description: Úsala para delegar tareas de código a Claude Code CLI (instalado en este VPS en ~/.local/bin/claude, v2.1.x, autenticado con Claude Pro del usuario). Dispara con "usar Claude Code", "delegar a claude", "claude -p", "que lo haga Claude", "Claude Pro", "revisar con Claude". Cubre modo print (-p), permisos, sesiones, tmux interactivo y review de PRs.
+description: Úsala para delegar tareas de código a Claude Code CLI (instalado en ~/.local/bin/claude, ≥2.1.x, autenticado con Claude Pro del usuario). Dispara con "usar Claude Code", "delegar a claude", "claude -p", "que lo haga Claude", "Claude Pro", "revisar con Claude". Cubre modo print (-p), permisos, sesiones, tmux interactivo y review de PRs.
 ---
 
 # Delegar a Claude Code

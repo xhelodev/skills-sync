@@ -1,0 +1,4 @@
+# Normaliza fin de línea: los .sh deben quedar en LF aunque se commitee desde Windows
+* text=auto eol=lf
+*.sh text eol=lf
+*.ps1 text eol=crlf
