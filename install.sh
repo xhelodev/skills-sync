@@ -47,9 +47,13 @@ for skill_dir in "$REPO"/skills/*/; do
     if [[ -L "$target" ]]; then
       rm -f "$target"
     elif [[ -e "$target" ]]; then
-      bak="$target.bak-$(date +%Y%m%d-%H%M%S)"
+      # Fuera del árbol de skills: si queda al lado del enlace, la herramienta lo
+      # detecta como un skill duplicado con nombre "nombre.bak-<fecha>".
+      bak_dir="$HOME/.skillsync/backups/$tool"
+      mkdir -p "$bak_dir"
+      bak="$bak_dir/$name-$(date +%Y%m%d-%H%M%S)"
       mv "$target" "$bak"
-      echo "  · backup: $name → $(basename "$bak")"
+      echo "  · backup: $name → $bak"
     fi
     ln -s "$skill_dir" "$target"
     echo "✓ $name → $target"

@@ -60,7 +60,8 @@ cd ~/skills-shared && ./install.sh
 El instalador autodetecta la máquina por hostname. Para forzar etiqueta:
 `SKILLSYNC_MACHINE=vps ./install.sh` (Linux) / `$env:SKILLSYNC_MACHINE="vps"; .\install.ps1` (Windows).
 
-Si ya existía un skill real en el destino, queda como backup `nombre.bak-<fecha>` junto al enlace.
+Si ya existía un skill real en el destino, se mueve a `~/.skillsync/backups/<herramienta>/`
+(no junto al enlace: así la herramienta no lo detecta como skill duplicado).
 
 ## MCP
 

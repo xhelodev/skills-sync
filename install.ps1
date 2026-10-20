@@ -32,9 +32,13 @@ Get-ChildItem -Directory (Join-Path $Repo "skills") | ForEach-Object {
     if (Test-Path $target) {
       if ((Get-Item $target -Force).LinkType) { Remove-Item $target -Force }
       else {
-        $bak = "$target.bak-$(Get-Date -Format yyyyMMdd-HHmmss)"
+        # Fuera del árbol de skills: al lado del enlace la herramienta lo detecta
+        # como un skill duplicado con nombre "nombre.bak-<fecha>".
+        $bakDir = Join-Path $HOME ".skillsync\backups\$tool"
+        New-Item -ItemType Directory -Force -Path $bakDir | Out-Null
+        $bak = Join-Path $bakDir "$name-$(Get-Date -Format yyyyMMdd-HHmmss)"
         Move-Item $target $bak
-        Write-Host "  · backup: $name → $(Split-Path -Leaf $bak)"
+        Write-Host "  · backup: $name → $bak"
       }
     }
     New-Item -ItemType Junction -Path $target -Value $_.FullName | Out-Null
