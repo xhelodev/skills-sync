@@ -19,9 +19,9 @@ echo "skillsync · máquina='$MACHINE' · repo='$REPO'"
 installed=0
 for skill_dir in "$REPO"/skills/*/; do
   name="$(basename "$skill_dir")"
-  machines="$(tr -d ' \n' < "$skill_dir/.machines" 2>/dev/null || echo '*')"
+  if [[ -f "$skill_dir/.machines" ]]; then machines="$(tr -d ' \n' < "$skill_dir/.machines")"; else machines='*'; fi
   targets_file="$skill_dir/.targets"
-  wanted="$(tr -d ' \n' < "$targets_file" 2>/dev/null || echo 'hermes,opencode,claude')"
+  if [[ -f "$targets_file" ]]; then wanted="$(tr -d ' \n' < "$targets_file")"; else wanted='hermes,opencode,claude'; fi
 
   # ¿corresponde a esta máquina?
   match=0

@@ -26,6 +26,14 @@ metadata:
 - `sudo` sin contraseña para `debian`. Los secretos se muestran como `***` al leerlos, pero están en el fichero.
 - Apps en `/home/debian/app/<nombre>`. Índice de servicios en `src/data/services.ts` (Astro).
 
+## Skills sincronizados (repo skills-shared)
+
+Los skills personales (este incluido) viven en el repo `~/skills-shared`
+(GitHub: `xhelodev/skills-shared`, privado) y se enlazan por symlink/junction a
+Hermes, OpenCode y Claude Code con `install.sh` / `install.ps1`. Editar un skill
+enlazado = editar el archivo del repo; al terminar, commit + push, y en las demás
+PCs: `git pull && ./install.sh`. No crear skills personales fuera del repo.
+
 ## Mapa de servicios
 
 - Gateway `home`: imagen `vps-index`, nginx con `network_mode: host`; proxy a AdGuard `:8443` y Hermes `:8642`/`:9119`.
