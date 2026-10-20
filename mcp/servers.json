@@ -1,0 +1,4 @@
+{
+  "comentario": "Servidores MCP SIN secretos. Un valor en forma de $VARIABLE se resuelve de las variables de entorno de cada PC al aplicar. Transportes: local (command+args) y http (url).",
+  "servers": []
+}

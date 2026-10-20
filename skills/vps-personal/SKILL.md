@@ -1,0 +1,59 @@
+---
+name: vps-personal
+description: "Use when operating the personal Debian VPS."
+version: 1.0.0
+author: Hermes Agent
+license: MIT
+platforms: [linux]
+metadata:
+  hermes:
+    tags: [vps, infra, self-hosting]
+    category: sysadmin
+---
+
+# VPS personal (Debian 13)
+
+## When to Use (cuándo usarla)
+
+- Cualquier operación en el VPS: desplegar, revisar puertos, tocar nginx, logs, contenedores.
+- Antes de publicar un servicio nuevo o de culpar a un fallo raro.
+
+## Reglas duras
+
+- Publicar solo en la IP tailnet `100.85.208.44`. La pública `148.113.183.234` no se expone nunca.
+- No tocar `/etc/systemd/system/docker.service.d/tailscale.conf`: AdGuard lo necesita.
+- El nginx del gateway va horneado en la imagen: cualquier cambio en `nginx.conf` exige `cd /home/debian/app/home && ./build.sh`.
+- `sudo` sin contraseña para `debian`. Los secretos se muestran como `***` al leerlos, pero están en el fichero.
+- Apps en `/home/debian/app/<nombre>`. Índice de servicios en `src/data/services.ts` (Astro).
+
+## Mapa de servicios
+
+- Gateway `home`: imagen `vps-index`, nginx con `network_mode: host`; proxy a AdGuard `:8443` y Hermes `:8642`/`:9119`.
+- Traceway: contenedor `traceway`, `/home/debian/app/traceway`, vhost tailnet `:8445`, volumen `traceway_traceway-data`, tope 2 GB. Sustituyó a SignOz el 18 oct 2026.
+- Puertos libres: `8444`, `127.0.0.1:8080`, OTLP `4317`/`4318`.
+- `opencode` ajeno en `127.0.0.1:3000`: ejecuta comandos con `sudo`. Si algo cambia sin explicación, revisar `journalctl` del usuario `debian` y sus `COMMAND=` antes de atribuirlo a un fallo.
+
+Inventario detallado: `references/servicios.md`.
+
+## Operaciones
+
+```bash
+docker ps --format '{{.Names}}\t{{.Ports}}\t{{.Status}}'
+docker logs -f --tail=100 <contenedor>
+cd /home/debian/app/home && ./build.sh   # tras tocar nginx.conf
+curl -sI http://100.85.208.44:<puerto>   # comprobar desde el tailnet
+journalctl _COMM=sudo --since "1 hour ago" | tail -50
+```
+
+## Quirks del host
+
+- Chromium local roto (exit 127, falta `libnspr4.so`): `browser_exec` y las capturas fallan; usar `curl`/`web_extract`.
+- Docker 29.9.1 activo, ~7 GB RAM: válido para servicios de prueba (comprobar disco con `df -h /` antes de algo grande).
+- TTS: el proveedor edge por defecto da 403. Usar `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural`, convertir con `~/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg` a ogg/opus y enviar como nota de voz.
+
+## Verificación
+
+- `docker ps` muestra `home` y `traceway` arriba.
+- El servicio responde en `100.85.208.44` y no en la IP pública.
+- Tras un rebuild, el cambio aparece en el HTML o en las cabeceras servidas.
+- Si el cambio no aparece: confirmar que se reconstruyó la imagen, no solo el contenedor.
