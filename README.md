@@ -40,9 +40,9 @@ irm https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b
 Destino custom: `curl ... | bash -s -- ~/otra-ruta`. Sin gh en la máquina:
 `SKILLSYNC_TOKEN=github_pat_xxx curl ... | bash` (PAT de solo lectura, solo este repo).
 
-URLs fijadas a la revisión `c3b82b4843cfca11de9bef9c1b39d117c24c04c9` (inmutables):
-- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.sh`
-- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.ps1`
+URLs fijadas a la revisión `6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6` (inmutables):
+- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6/bootstrap.sh`
+- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6/bootstrap.ps1`
 
 Alternativa manual (usa **SSH**, no HTTPS):
 
