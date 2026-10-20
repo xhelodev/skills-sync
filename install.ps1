@@ -22,7 +22,7 @@ Get-ChildItem -Directory (Join-Path $Repo "skills") | ForEach-Object {
 
   $match = $false
   foreach ($t in $tags) { $tt = $t.Trim(); if ($tt -eq "*" -or $tt -eq $Machine) { $match = $true } }
-  if (-not $match) { Write-Host "· $name → omitido (solo para: $machines)"; return }
+  if (-not $match) { Write-Host "· $name → omitido (solo para: $($tags -join ','))"; return }
 
   foreach ($tool in $Targets.Keys) {
     if ($wanted -notcontains $tool) { continue }
@@ -48,13 +48,58 @@ Write-Host "Skills enlazados: $installed"
 $serversFile = Join-Path $Repo "mcp\servers.json"
 if (Test-Path $serversFile) {
   $cfg = Get-Content $serversFile -Raw | ConvertFrom-Json
-  if ($cfg.servers.Count -eq 0) { Write-Host "MCP: 0 servidores en servers.json — nada que aplicar" }
-  foreach ($s in $cfg.servers) {
-    if ($s.transport -eq "http") {
-      claude mcp add --transport http $s.name $s.url
-    } else {
-      & claude mcp add $s.name -- $s.command @($s.args)
+  $servers = @($cfg.servers)
+  if ($servers.Count -eq 0) {
+    Write-Host "MCP: 0 servidores en servers.json — nada que aplicar"
+  } elseif (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
+    Write-Host "MCP: claude no está en PATH — $($servers.Count) servidor(es) sin aplicar"
+  } else {
+    foreach ($s in $servers) {
+      # '$VAR' se resuelve del entorno local; si falta, se omite el servidor.
+      $envFlags = @()
+      $missing = @()
+      if ($s.env) {
+        foreach ($p in $s.env.PSObject.Properties) {
+          $val = [string]$p.Value
+          if ($val.StartsWith('$')) {
+            $resolved = [Environment]::GetEnvironmentVariable($val.Substring(1))
+            if ([string]::IsNullOrEmpty($resolved)) { $missing += $p.Name; continue }
+          } else { $resolved = $val }
+          $envFlags += @("-e", "$($p.Name)=$resolved")
+        }
+      }
+      # headers: expansión de $VAR en cualquier posición (ej: "Bearer $TOKEN")
+      $headerFlags = @()
+      $missingH = @()
+      if ($s.headers) {
+        foreach ($h in $s.headers.PSObject.Properties) {
+          $out = [string]$h.Value
+          foreach ($m in [regex]::Matches($out, '\$([A-Za-z_][A-Za-z0-9_]*)')) {
+            $varName = $m.Groups[1].Value
+            $varValue = [Environment]::GetEnvironmentVariable($varName)
+            if ([string]::IsNullOrEmpty($varValue)) { $missingH += "$($h.Name)=`$$varName"; continue }
+            $out = $out.Replace($m.Value, $varValue)
+          }
+          $headerFlags += @("-H", "$($h.Name): $out")
+        }
+      }
+      if ($missing.Count -gt 0 -or $missingH.Count -gt 0) {
+        $allMissing = @($missing) + @($missingH)
+        Write-Host "MCP ! $($s.name): faltan variables $($allMissing -join ', ') — expórtalas y re-ejecuta"
+        continue
+      }
+
+      & claude mcp remove -s user $s.name 2>$null | Out-Null
+      # Orden importa: `-e` es variádico y va después del nombre, antes de `--`.
+      if ($s.transport -eq "http") {
+        $addArgs = @("mcp", "add", "-s", "user", "--transport", "http", $s.name, $s.url) + $headerFlags
+      } else {
+        $addArgs = @("mcp", "add", "-s", "user", $s.name) + $envFlags + @("--", $s.command) + @($s.args)
+      }
+      & claude @addArgs
+      if ($LASTEXITCODE -eq 0) { Write-Host "MCP OK claude: $($s.name)" }
+      else { Write-Host "MCP X claude: $($s.name)" }
+      Write-Host "     · OpenCode/Hermes: paso manual (ver README)"
     }
-    Write-Host "     · OpenCode/Hermes: paso manual (ver README)"
   }
 }

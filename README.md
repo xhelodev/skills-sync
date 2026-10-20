@@ -44,12 +44,18 @@ URLs fijadas a la revisión `c3b82b4843cfca11de9bef9c1b39d117c24c04c9` (inmutabl
 - `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.sh`
 - `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.ps1`
 
-Alternativa manual:
+Alternativa manual (usa **SSH**, no HTTPS):
 
 ```bash
-git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
+git clone git@github.com:xhelodev/skills-shared.git ~/skills-shared
 cd ~/skills-shared && ./install.sh
 ```
+
+> El repo es privado. Clonar por HTTPS (`https://github.com/...`) falla con
+> `remote: Repository not found` si git no tiene credenciales: GitHub no acepta la
+> contraseña de la cuenta para operaciones git. Si preferís HTTPS, configurá un PAT
+> o `gh auth setup-git`. Con SSH solo necesitás la clave agregada a GitHub
+> (`ssh -T git@github.com` debe saludarte como `xhelodev`).
 
 El instalador autodetecta la máquina por hostname. Para forzar etiqueta:
 `SKILLSYNC_MACHINE=vps ./install.sh` (Linux) / `$env:SKILLSYNC_MACHINE="vps"; .\install.ps1` (Windows).
@@ -60,6 +66,9 @@ Si ya existía un skill real en el destino, queda como backup `nombre.bak-<fecha
 
 - `mcp/servers.json` **nunca lleva secretos**: un valor `"$MI_VAR"` se resuelve de las
   variables de entorno de cada PC al momento de aplicar. Nada de keys en el repo.
+- Soporta `env` (stdio) y `headers` (http); en `headers` el `$VAR` puede ir embebido
+  (`"Authorization": "Bearer $MI_TOKEN"`). Si falta la variable, ese servidor se omite.
+- Se instalan en el scope `user` de Claude Code (sin tocar config por proyecto).
 - v1 aplica automáticamente a **Claude Code** (`claude mcp add`).
   OpenCode (sección `mcp` de `opencode.jsonc`) y Hermes (`hermes config set`) quedan
   como paso manual hasta automatizarlos con un servidor real.
