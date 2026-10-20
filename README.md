@@ -23,16 +23,32 @@ install.ps1                instalador Windows (junctions, sin admin)
 2. Si no aplica a todas las máquinas: `.machines` con la etiqueta (ej: `vps`).
 3. `git add -A && git commit -m "..." && git push` → en cada PC: `git pull && ./install.sh`.
 
-## Preparar una PC nueva
+## Preparar una PC nueva (una línea)
+
+Bootstrap público (gist): usa `SKILLSYNC_TOKEN` si está exportado, si no `gh auth token`
+(si hay gh autenticado), si no pide un token fine-grained de solo lectura de este repo
+por teclado — y nunca lo guarda (limpia la URL remota tras clonar).
 
 ```bash
-# Linux/macOS
-git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
-cd ~/skills-shared && ./install.sh
+# Linux / macOS
+curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
 
 # Windows (PowerShell)
-git clone https://github.com/xhelodev/skills-shared.git "$HOME\skills-shared"
-cd "$HOME\skills-shared"; .\install.ps1
+irm https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.ps1 | iex
+```
+
+Destino custom: `curl ... | bash -s -- ~/otra-ruta`. Sin gh en la máquina:
+`SKILLSYNC_TOKEN=github_pat_xxx curl ... | bash` (PAT de solo lectura, solo este repo).
+
+URLs fijadas a la revisión `c3b82b4843cfca11de9bef9c1b39d117c24c04c9` (inmutables):
+- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.sh`
+- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/c3b82b4843cfca11de9bef9c1b39d117c24c04c9/bootstrap.ps1`
+
+Alternativa manual:
+
+```bash
+git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
+cd ~/skills-shared && ./install.sh
 ```
 
 El instalador autodetecta la máquina por hostname. Para forzar etiqueta:
