@@ -55,6 +55,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 ## Quirks del host
 
+- Node se gestiona con nvm (`~/.nvm`): NO está en el PATH de sesiones no interactivas (scripts, cron, unit de systemd). Usar `source ~/.nvm/nvm.sh` o la ruta absoluta `~/.nvm/versions/node/<versión>/bin/node`. Default: v24 LTS.
 - Chromium local roto (exit 127, falta `libnspr4.so`): `browser_exec` y las capturas fallan; usar `curl`/`web_extract`.
 - Docker 29.9.1 activo, ~7 GB RAM: válido para servicios de prueba (comprobar disco con `df -h /` antes de algo grande).
 - TTS: el proveedor edge por defecto da 403. Usar `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural`, convertir con `~/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg` a ogg/opus y enviar como nota de voz.
