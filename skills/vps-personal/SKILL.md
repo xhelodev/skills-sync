@@ -63,7 +63,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 - Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json`: `ssh`, `seguridad`, `hermes`, `alertas`, `uso`, `updates` (formato `chat:topic_thread`).
 - Las alertas de servidor (crontab `~/scripts/vps-*.sh`, `disk-cleanup.sh`) van por `tg-notify alertas`. Para alertas nuevas desde Hermes, reutilizar `tg-notify alertas` y dejar el delivery del cron en `local` (evita duplicar).
-- Alerta cuota GLM Coding Plan: cron Hermes `09243f93eb87` (cada hora, no_agent) → `~/.hermes/scripts/quota-alert.sh`; avisa solo si alguna cuota (5h o semanal, API `api.z.ai/api/monitor/usage/quota/limit`) ≥ `UMBRAL` (80%). Log: `~/.hermes/scripts/quota-alert.log`.
+- Alerta cuotas IA: cron Hermes `09243f93eb87` (cada hora, no_agent) → `~/.hermes/scripts/quota-alert.sh`; vigila GLM Coding Plan (`api.z.ai/api/monitor/usage/quota/limit`) y OpenCode Go (`opencode.ai/zen/go/v1/usage`, key `OPENCODE_GO_API_KEY` en `.env` de Hermes); avisa solo si alguna ventana ≥ `UMBRAL` (80%). Log: `~/.hermes/scripts/quota-alert.log`.
 
 ## Verificación
 
