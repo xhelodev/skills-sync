@@ -63,9 +63,11 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 ## Notificaciones Telegram
 
-- Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json`: `ssh`, `seguridad`, `hermes`, `alertas`, `uso`, `updates` (formato `chat:topic_thread`).
-- Las alertas de servidor (crontab `~/scripts/vps-*.sh`, `disk-cleanup.sh`) van por `tg-notify alertas`. Para alertas nuevas desde Hermes, reutilizar `tg-notify alertas` y dejar el delivery del cron en `local` (evita duplicar).
-- Alerta cuotas IA: cron Hermes `09243f93eb87` (cada hora, no_agent) → `~/.hermes/scripts/quota-alert.sh`; vigila GLM Coding Plan (`api.z.ai/api/monitor/usage/quota/limit`) y OpenCode Go (`opencode.ai/zen/go/v1/usage`, key `OPENCODE_GO_API_KEY` en `.env` de Hermes); avisa solo si alguna ventana ≥ `UMBRAL` (80%). Log: `~/.hermes/scripts/quota-alert.log`.
+- Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json` (bot @capy_notificator_bot, chat 589215): `alertas` (176817), `ssh` (176821, daemon ssh-notify.service), `seguridad` (176822), `uso` (176840, cuotas IA + vps-uso.sh), `updates` (176841, vps-updates + index-servicios), `github` (raíz 1763, PRs/auditorías).
+- Modo de hilo según el separador del valor del alias: `chat:raiz` = `message_thread_id` (hilos legacy); `chat@raiz` = `reply_to_message_id` (hilos nuevos con raíz creada por bot, que Telegram NO acepta como thread). tg-notify resuelve el alias él mismo vía config.json.
+- Alertas de servidor (crontab `~/scripts/vps-*.sh`, `disk-cleanup.sh`) van por `tg-notify`. Para avisos nuevos desde Hermes: enviar con `tg-notify` desde el script y dejar el delivery del cron en `local` (el deliver `telegram:chat:thread` de Hermes falla con threads que Telegram no tiene registrados).
+- PRs/auditorías de repos: crons `b017e613ba0c` (pr-review-dispatch.sh) y `7f88bf75e629` (repo-audit-dispatch.sh) notifican con `tg-notify github`; delivery en `local`. Los informes completos van como comentarios/issues en GitHub, no por Telegram.
+- Alerta cuotas IA: cron Hermes `09243f93eb87` (cada hora, no_agent) → `~/.hermes/scripts/quota-alert.sh` → hilo `uso`; vigila GLM Coding Plan (`api.z.ai/api/monitor/usage/quota/limit`) y OpenCode Go (`opencode.ai/zen/go/v1/usage`, key `OPENCODE_GO_API_KEY` en `.env` de Hermes); avisa solo si alguna ventana ≥ `UMBRAL` (10%). Log: `~/.hermes/scripts/quota-alert.log`.
 
 ## Verificación
 
