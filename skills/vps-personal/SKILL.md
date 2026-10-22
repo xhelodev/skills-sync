@@ -39,6 +39,7 @@ PCs: `git pull && ./install.sh`. No crear skills personales fuera del repo.
 - Gateway `home`: imagen `vps-index`, nginx con `network_mode: host`; proxy a AdGuard `:8443` y Hermes `:8642`/`:9119`.
 - Traceway: contenedor `traceway`, `/home/debian/app/traceway`, vhost tailnet `:8445`, volumen `traceway_traceway-data`, tope 2 GB. Sustituyó a SignOz el 18 oct 2026.
 - Puertos libres: `8444`, `127.0.0.1:8080`, OTLP `4317`/`4318`.
+- Vigilante del índice: cron Hermes `index-servicios` (id `4457fa1e772b`, cada 30m, monitor `~/.hermes/scripts/services-monitor.sh`). Detecta servicios web nuevos en puertos del tailnet/contenedores; el agente agrega la entrada a `src/data/services.ts`, hace `./build.sh` y avisa en Telegram topic `alertas`. Servicios ambiguos (solo loopback, no web, transitorios) los consulta en vez de agregarlos.
 - `opencode` ajeno en `127.0.0.1:3000`: ejecuta comandos con `sudo`. Si algo cambia sin explicación, revisar `journalctl` del usuario `debian` y sus `COMMAND=` antes de atribuirlo a un fallo.
 
 Inventario detallado: `references/servicios.md`.
