@@ -59,6 +59,12 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 - Docker 29.9.1 activo, ~7 GB RAM: válido para servicios de prueba (comprobar disco con `df -h /` antes de algo grande).
 - TTS: el proveedor edge por defecto da 403. Usar `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural`, convertir con `~/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg` a ogg/opus y enviar como nota de voz.
 
+## Notificaciones Telegram
+
+- Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json`: `ssh`, `seguridad`, `hermes`, `alertas`, `uso`, `updates` (formato `chat:topic_thread`).
+- Las alertas de servidor (crontab `~/scripts/vps-*.sh`, `disk-cleanup.sh`) van por `tg-notify alertas`. Para alertas nuevas desde Hermes, reutilizar `tg-notify alertas` y dejar el delivery del cron en `local` (evita duplicar).
+- Alerta cuota GLM Coding Plan: cron Hermes `09243f93eb87` (cada hora, no_agent) → `~/.hermes/scripts/quota-alert.sh`; avisa solo si alguna cuota (5h o semanal, API `api.z.ai/api/monitor/usage/quota/limit`) ≥ `UMBRAL` (80%). Log: `~/.hermes/scripts/quota-alert.log`.
+
 ## Verificación
 
 - `docker ps` muestra `home` y `traceway` arriba.
