@@ -96,9 +96,12 @@ consultar** antes de hacerlo.
 | 8080           | *(libre)*      | —                 | reservado/deprecated para OpenCode: hoy **no tiene vhost**, el server escucha solo en `127.0.0.1:3000` (túnel SSH). Ver skill `ovh` §6.1 para publicarlo |
 | 9119           | Hermes         | 127.0.0.1:9119    | dashboard                 |
 | 8642           | Hermes API     | 127.0.0.1:8642    | API OpenAI-compatible `/v1`; requiere `API_SERVER_KEY` (bearer); nativo systemd, no contenedor |
-| 8443           | AdGuard Home   | 127.0.0.1:3001    | UI                        |
+| 8443           | Lotion (via `tailscale serve` → 127.0.0.1:3742) | — | el registro antiguo decía AdGuard; verificar con `tailscale serve status` |
+| 8444           | Linkbio (via `tailscale serve` → 127.0.0.1:3743) | — | **NO libre** (registro antiguo lo daba por libre; verificado 24 oct 2026 con `ss`) |
 | 8445           | Traceway       | 127.0.0.1:5080    | UI + ingesta OTLP (`/api/otel/v1/*`); dashboard |
-| 8446           | Traceway RUM   | 127.0.0.1:5080    | **loopback, NO tailnet**: única excepción pública aprobada (18 oct 2026), `https://otel.carpincho.dev/api/report` solo, vía Cloudflare Tunnel (`cloudflared`, solo salida). El resto del vhost devuelve 404 |
+| 8447           | Linkbio        | 127.0.0.1:3743    | mismo backend que :8444, vía nginx gateway |
+| 8448           | Zammad         | 127.0.0.1:8090    | helpdesk (prueba); compose en `/home/debian/app/zammad`, sin Elasticsearch (búsqueda vía BD) |
+| 8446           | Traceway OTLP  | 127.0.0.1:5080    | **loopback, NO tailnet**: única excepción pública aprobada (18 oct, ajustada 19 oct a OTLP), `https://otel.carpincho.dev/api/otel/` (traces/metrics/logs) vía Cloudflare Tunnel (`cloudflared`, solo salida). `/api/report` y el resto del vhost → 404 |
 | 53             | AdGuard DNS    | bind directo a 100.85.208.44 | udp/tcp          |
 
 > El registro se desvía del `nginx.conf` real: la landing es **estática** (nginx
