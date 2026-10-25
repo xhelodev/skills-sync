@@ -54,12 +54,20 @@ curl -sI http://100.85.208.44:<puerto>   # comprobar desde el tailnet
 journalctl _COMM=sudo --since "1 hour ago" | tail -50
 ```
 
+## Deploy de servicios nuevos
+
+- Patrón Node/sencillo: Dockerfile `node:24-slim` (o slim de la versión usada), compose con `build: .`, publish `"127.0.0.1:<PUERTO>:3000"`, `HOST: 0.0.0.0` dentro del container, volúmenes para datos/estado y `restart: unless-stopped`.
+- Acceso tailnet: `sudo tailscale serve --bg --https=<PUERTO_ALTO> http://127.0.0.1:<PUERTO>` (serve exige sudo). Puertos altos usados: 8443 lotion, 8444 link-in-bio.
+- Verificar el serve con `curl --resolve <host.ts.net>:<puerto>:100.85.208.44 https://<host>.ts.net:<puerto>/`: curl contra `127.0.0.1:<puerto_serve>` da connection refused aunque el serve esté bien (solo escucha vía tailscaled, no en loopback).
+- Lanzar el contenedor con `docker compose create && docker compose start`, NO `compose up`: el hook de `terminal` marca `compose up` como proceso long-lived y lo bloquea en foreground aunque `-d` devuelva al instante.
+
 ## Quirks del host
 
 - Node se gestiona con nvm (`~/.nvm`): NO está en el PATH de sesiones no interactivas (scripts, cron, unit de systemd). Usar `source ~/.nvm/nvm.sh` o la ruta absoluta `~/.nvm/versions/node/<versión>/bin/node`. Default: v24 LTS.
 - Chromium local roto (exit 127, falta `libnspr4.so`): `browser_exec` y las capturas fallan; usar `curl`/`web_extract`.
 - Docker 29.9.1 activo, ~7 GB RAM: válido para servicios de prueba (comprobar disco con `df -h /` antes de algo grande).
 - TTS: el proveedor edge por defecto da 403. Usar `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural`, convertir con `~/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg` a ogg/opus y enviar como nota de voz.
+- Hermes se auto-actualiza vía `vps-updates.sh` (crontab 05:30 diario): `hermes update --check` imprime `Up to date ... (stable vX)` también cuando está al día, así que detectar con `grep -qi 'up to date'`, nunca comparando versiones extraídas. Si hay versión nueva aplica `hermes update --yes` (instalación git; reinicia el gateway por defecto) y avisa por el hilo `updates` con `vX → vY`; si falla, avisa el error.
 
 ## Notificaciones Telegram
 
