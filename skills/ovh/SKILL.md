@@ -1,6 +1,6 @@
 ---
 name: ovh
-description: Opera y diagnostica el VPS personal "ovh" (nodo Tailscale vps-9c2aefdf, 100.85.208.44, SSH alias `ovh`) y todo lo que corre ahí dentro - OpenCode (servidor y CLI), Hermes (gateway y dashboard), Traceway, AdGuard Home, Docker, el gateway nginx/landing de Astro y Tailscale. Úsala para chequear estado, leer logs, reiniciar o actualizar servicios, y para saber qué NO tocar. Dispara con "ovh", "vps", "vps-9c2aefdf", "100.85.208.44", "ssh ovh", "opencode serve", "servidor de opencode", "hermes", "traceway", "adguard", "tailnet", "puerto 3000/5080/8443/8445/9119". NO aplica a Cloudflare, Wrangler ni al opencode de la máquina local.
+description: Opera y diagnostica el VPS personal "ovh" (nodo Tailscale vps-9c2aefdf, 100.85.208.44, SSH alias `ovh`) y todo lo que corre ahí dentro - OpenCode (servidor y CLI), Hermes (gateway y dashboard), Traceway, AdGuard Home, Docker, el gateway nginx/landing de Astro y Tailscale. Úsala para chequear estado, leer logs, reiniciar o actualizar servicios, y para saber qué NO tocar. Dispara con "ovh", "vps", "vps-9c2aefdf", "100.85.208.44", "ssh ovh", "opencode serve", "servidor de opencode", "hermes", "traceway", "adguard", "tailnet", "puerto 3000/5080/8081/8446/9119", "sidecar", "web-adguard", "web-livesync", "livesync", "mate-tv". NO aplica a Cloudflare, Wrangler ni al opencode de la máquina local.
 ---
 
 # Operar el VPS `ovh` (vps-9c2aefdf)
@@ -177,7 +177,9 @@ ssh ovh 'cd /home/debian/app/traceway && docker compose ps'
 ## 6. Gateway nginx + landing (índice)
 
 - Gateway: `/home/debian/app/home/nginx.conf`, contenedor **`home`** con
-  `network_mode: host`, escucha **solo** `100.85.208.44` (nunca `0.0.0.0`).
+  `network_mode: host`. Hoy escucha `100.85.208.44:80`, `100.85.208.44:443` y
+  `127.0.0.1:8446` (RUM de Traceway) — nunca `0.0.0.0`. Los antiguos vhosts
+  8443/8445 ya no existen: los servicios se publican con sidecars `ts-*` (ver §8).
 - Landing Astro (índice de tarjetas): `/home/debian/app/home/src/data/services.ts`.
 - Certificado Tailscale: `/home/debian/app/home/certs/{cert,key}.pem`; se renueva con
   `/home/debian/app/home/renew-cert.sh` (y recarga nginx).
@@ -187,67 +189,15 @@ Al agregar un servicio: usar el procedimiento de la skill `tailscale-service`
 (elegir puerto tailnet libre, publicar en `127.0.0.1`, vhost en `nginx.conf`,
 tarjeta en `services.ts`, `build.sh`, verificar).
 
-### 6.1 Re-exponer OpenCode por el tailnet (puerto 8080)
+### 6.1 Re-exponer OpenCode por el tailnet
 
-Hoy opencode es solo loopback. Si el usuario pide alcanzarlo por el tailnet, el
-puerto **8080 está libre** (verificado) y es el que usaba el registro viejo. Pasos:
-
-1. **No hay que tocar opencode**: su server ya escucha en `127.0.0.1:3000`.
-
-2. **Vhost en `/home/debian/app/home/nginx.conf`** (opencode usa SSE/websocket:
-   hacen falta los headers de upgrade y timeouts largos):
-
-   ```nginx
-   # OpenCode (puerto 8080)
-   server {
-       listen 100.85.208.44:8080 ssl;
-       http2 on;
-       server_name vps-9c2aefdf.tail3522d6.ts.net;
-
-       ssl_certificate     /etc/nginx/certs/cert.pem;
-       ssl_certificate_key /etc/nginx/certs/key.pem;
-
-       location / {
-           proxy_pass http://127.0.0.1:3000;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection "upgrade";
-           proxy_set_header Host $http_host;          # conserva :8080
-           proxy_set_header X-Real-IP $remote_addr;
-           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-           proxy_set_header X-Forwarded-Proto $scheme;
-           proxy_read_timeout 3600s;
-           proxy_send_timeout 3600s;
-           proxy_buffering off;                        # SSE/streaming
-       }
-   }
-   ```
-
-3. **Tarjeta en `/home/debian/app/home/src/data/services.ts`**:
-
-   ```ts
-   {
-     name: "OpenCode",
-     description: "Servidor de agentes · sesiones y TUI web",
-     href: "https://{host}:8080",
-     badge: ":8080",
-     icon: "⌨️",
-     color: "violet",
-     external: true,
-   },
-   ```
-
-4. **Reconstruir**: `/home/debian/app/home/build.sh`.
-
-5. **Verificar**:
-
-   ```bash
-   ssh ovh 'ss -lntp | grep 8080'                                  # solo 100.85.208.44
-   ssh ovh 'curl -sk -o /dev/null -w "%{http_code}\n" https://100.85.208.44:8080/'
-   ```
-
-6. **Actualizar el registro de puertos** del skill `tailscale-service` (§8 de acá
-   lista el estado real).
+> **ACTUALIZADO 2026-10-25:** el puerto **8080 ya NO está libre** — lo ocupa el
+> panel de mate-tv (`127.0.0.1:8080`, público vía `tv.chelo.xyz`). Si algún día
+> se quiere publicar OpenCode, elegir un puerto tailnet libre consultando el
+> §8 y `home/nginx.conf` (que ya solo escucha 80/443 y 127.0.0.1:8446), o
+> mejor, seguir el patrón actual de **sidecar Tailscale** (`ts-<servicio>`)
+> que usan adguard/traceway/hermes/livesync. El ejemplo histórico del vhost en
+> 8080 quedó obsoleto y se retiró de esta skill para evitar colisiones.
 
 > Ojo: cualquiera en el tailnet podría alcanzarlo; el server sigue protegido por el
 > password de `service.json`. Nunca lo expongas fuera del tailnet.
@@ -256,10 +206,12 @@ puerto **8080 está libre** (verificado) y es el que usaba el registro viejo. Pa
 
 - **Prohibido**: `tailscale funnel`, túneles públicos, port-forwarding en el
   router/cloud, o bind a `0.0.0.0`/IP pública. ufw solo permite `tailscale0` + `41641/udp`.
-- **Única excepción pública aprobada (18 oct 2026)**: la ingesta RUM web de Traceway
+- **Excepciones públicas aprobadas**: (1, 18 oct 2026) la ingesta RUM web de Traceway
   `https://otel.carpincho.dev/api/report` → `127.0.0.1:8446` vía Cloudflare Tunnel
-  (solo salida). `/api/otel`, el dashboard `:8445` y todo lo demás siguen tailnet-only.
-  **No ampliar esa excepción.**
+  (solo salida); (2) el panel de mate-tv `https://tv.chelo.xyz` → `127.0.0.1:8080`
+  (verificado 2026-10-25, tunnel activo). Todo lo demás sigue tailnet-only; `/api/otel`
+  se alcanza por el sidecar `ts-traceway` (nodo `web-traceway`).
+  **No ampliar estas excepciones.**
 - **OpenCode NO está publicado en el gateway** (se quitó del índice a propósito);
   hoy es solo `127.0.0.1:3000` y se llega por túnel SSH. Para publicarlo, ver §6.1.
   El **§8 es la fuente de verdad** del uso de puertos; ante dudas, verificá contra
@@ -267,21 +219,34 @@ puerto **8080 está libre** (verificado) y es el que usaba el registro viejo. Pa
 - No borres `opencode.db`, `service.json` ni `auth.json`.
 - Si un pedido implica exponer algo a internet público: **detenerse y consultar**.
 
-## 8. Registro de puertos (estado real)
+## 8. Registro de puertos (estado real, verificado 2026-10-25)
+
+> La arquitectura de publicación cambió: nginx `home` ya solo sirve la landing
+> (80/443) y el RUM de Traceway (127.0.0.1:8446). El resto de servicios se
+> publica con **sidecars Tailscale por servicio** (contenedores `ts-*` con
+> identidad propia en el tailnet): `ts-adguard` → nodo `web-adguard`
+> (100.86.45.71), `ts-hermes-api` → `web-hermes-api` (100.72.215.102),
+> `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-livesync` →
+> `web-livesync` (100.104.63.52), `ts-traceway` → `web-traceway`
+> (100.111.61.44) y `ts-mate-tv` (red de mate-tv). Los vhosts 8443 y 8445
+> **ya no existen**.
 
 | Puerto | Qué | Backend | Alcance |
 | --- | --- | --- | --- |
+| 25 | SMTP local (postfix) | `127.0.0.1:25` | loopback, interno |
 | 53 | AdGuard DNS | bind directo `100.85.208.44` | tailnet |
-| 443, 80 | Landing Astro `/` | `127.0.0.1` (nginx `home`) | tailnet |
+| 80, 443 | Landing Astro `/` | nginx `home` (network host) | tailnet |
+| 1080 | proxy SOCKS `warp` | contenedor warp → `127.0.0.1:1080` | loopback |
 | 3000 | OpenCode server | `127.0.0.1:3000` | **loopback** (túnel SSH) |
-| 3001 | AdGuard UI | contenedor adguardhome | loopback (vía gateway en 8443) |
-| 5080 | Traceway | contenedor traceway | loopback (vía gateway en 8445) |
-| 8080 | *(libre)* | OpenCode `127.0.0.1:3000` | **disponible**: puerto reservado para publicar opencode (§6.1) |
-| 8443 | AdGuard UI | → `127.0.0.1:3001` | tailnet (nginx) |
-| 8445 | Traceway UI/OTLP | → `127.0.0.1:5080` | tailnet (nginx) |
-| 8446 | Traceway RUM | → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel) |
-| 8642 | Hermes API `/v1` | `127.0.0.1:8642` | tailnet (nginx) |
-| 9119 | Hermes Dashboard | `127.0.0.1:9119` | tailnet (nginx) |
+| 3001 | AdGuard UI | contenedor adguardhome → `127.0.0.1:3001` | sidecar `ts-adguard` (`web-adguard`) |
+| 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
+| 5984 | obsidian-livesync (CouchDB) | contenedor livesync → `127.0.0.1:5984` | sidecar `ts-livesync` (`web-livesync`) |
+| 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | `127.0.0.1:8080` | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
+| 8081 | API del panel mate-tv | bind directo `100.85.208.44:8081` | tailnet |
+| 8446 | Traceway RUM | nginx `home` → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel `otel.carpincho.dev`) |
+| 8642 | Hermes API `/v1` | `127.0.0.1:8642` | sidecar `ts-hermes-api` (`web-hermes-api`) |
+| 9118 | `ts-dash-proxy` (nginx:alpine) | `127.0.0.1:9118` | loopback, interno |
+| 9119 | Hermes Dashboard | `127.0.0.1:9119` | sidecar `ts-hermes-dash` (`web-hermes-dash`) |
 
 ## 9. Troubleshooting
 

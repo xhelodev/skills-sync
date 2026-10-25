@@ -90,26 +90,48 @@ consultar** antes de hacerlo.
 
 ## Registro de puertos
 
-| Puerto tailnet | Servicio       | Backend interno   | Notas                     |
-| -------------- | -------------- | ----------------- | ------------------------- |
-| 443            | Landing        | estático (nginx `home`) | índice Astro; `/notas` y `/api` **no existen** hoy |
-| 8080           | *(libre)*      | —                 | reservado/deprecated para OpenCode: hoy **no tiene vhost**, el server escucha solo en `127.0.0.1:3000` (túnel SSH). Ver skill `ovh` §6.1 para publicarlo |
-| 9119           | Hermes         | 127.0.0.1:9119    | dashboard                 |
-| 8642           | Hermes API     | 127.0.0.1:8642    | API OpenAI-compatible `/v1`; requiere `API_SERVER_KEY` (bearer); nativo systemd, no contenedor |
-| 8443           | Lotion (via `tailscale serve` → 127.0.0.1:3742) | — | el registro antiguo decía AdGuard; verificar con `tailscale serve status` |
-| 8444           | Linkbio (via `tailscale serve` → 127.0.0.1:3743) | — | **NO libre** (registro antiguo lo daba por libre; verificado 24 oct 2026 con `ss`) |
-| 8445           | Traceway       | 127.0.0.1:5080    | UI + ingesta OTLP (`/api/otel/v1/*`); dashboard |
-| 8447           | Linkbio        | 127.0.0.1:3743    | mismo backend que :8444, vía nginx gateway |
-| 8448           | Zammad         | 127.0.0.1:8090    | helpdesk (prueba); compose en `/home/debian/app/zammad`, sin Elasticsearch (búsqueda vía BD) |
-| 8446           | Traceway OTLP  | 127.0.0.1:5080    | **loopback, NO tailnet**: única excepción pública aprobada (18 oct, ajustada 19 oct a OTLP), `https://otel.carpincho.dev/api/otel/` (traces/metrics/logs) vía Cloudflare Tunnel (`cloudflared`, solo salida). `/api/report` y el resto del vhost → 404 |
-| 53             | AdGuard DNS    | bind directo a 100.85.208.44 | udp/tcp          |
+> **Reescrito 2026-10-25 tras auditoría.** Estado verificado con `ss -tlnp`,
+> `docker ps`, `tailscale serve status` y `tailscale status`. Fuente de verdad
+> completa: skill `ovh` §8.
 
-> El registro se desvía del `nginx.conf` real: la landing es **estática** (nginx
-> sirve los archivos, no hay upstream `:4000/4001`; `catcore` está parado) y
-> **OpenCode no tiene vhost** (el 8080 quedó sin uso). El stack de Nextcloud
-> (`/home/debian/app/nextcloud`, `127.0.0.1:8081`) también está **parado**.
-> Verificar contra `home/nginx.conf` antes de dar por libre un puerto. El skill
-> `ovh` documenta el estado real de todo el stack del VPS.
+**Vía gateway nginx `home`** (bind `100.85.208.44`):
+
+| Puerto tailnet | Servicio | Backend interno | Notas |
+| -------------- | -------- | --------------- | ----- |
+| 443            | Landing  | estático (nginx `home`) | índice Astro; `/notas` y `/api` **no existen** hoy |
+| 80             | Landing (redirect a 443) | estático | |
+| 53             | AdGuard DNS | bind directo a 100.85.208.44 | udp/tcp |
+| 8446           | Traceway RUM | 127.0.0.1:5080 | **loopback, NO tailnet**: excepción pública, `https://otel.carpincho.dev/api/report` vía Cloudflare Tunnel (solo salida) |
+
+**Vía sidecars Tailscale** (cada servicio con nodo propio en el tailnet; ya no
+hay vhosts 8443/8445 en el gateway):
+
+| Nodo tailnet | Servicio | Backend interno | Notas |
+| ------------ | -------- | --------------- | ----- |
+| `web-adguard` (100.86.45.71) | AdGuard UI | 127.0.0.1:3001 | sidecar `ts-adguard` |
+| `web-traceway` (100.111.61.44) | Traceway UI+OTLP | 127.0.0.1:5080 | sidecar `ts-traceway` |
+| `web-hermes-api` (100.72.215.102) | Hermes API | 127.0.0.1:8642 | sidecar `ts-hermes-api`; requiere `API_SERVER_KEY` (bearer) |
+| `web-hermes-dash` (100.97.166.4) | Hermes Dashboard | 127.0.0.1:9119 | sidecar `ts-hermes-dash` |
+| `web-livesync` (100.104.63.52) | obsidian-livesync | 127.0.0.1:5984 | sidecar `ts-livesync` |
+| `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en 127.0.0.1:8080 (público vía `tv.chelo.xyz`, CF Tunnel) y API en 100.85.208.44:8081 |
+
+**Loopback / otros**:
+
+| Puerto | Servicio | Notas |
+| ------ | -------- | ----- |
+| 3000 | OpenCode server | túnel SSH; sin publicar a propósito |
+| 1080 | proxy SOCKS `warp` | solo loopback |
+| 9118 | `ts-dash-proxy` (nginx:alpine) | interno |
+| 5984 | CouchDB livesync | solo loopback, expuesto vía sidecar |
+| 8080 / 8081 | panel / API de mate-tv | **NO libres** |
+
+> **Eliminado del registro (verificado inexistente el 25 oct 2026):** Lotion
+> (8443), Linkbio (8444/8447), Zammad (8448) — no hay contenedores, directorios
+> en `/home/debian/app/`, `tailscale serve` config ni listeners. El antiguo
+> acceso a AdGuard/Traceway por 8443/8445 del gateway también desapareció.
+> El stack de Nextcloud (`/home/debian/app/nextcloud`) sigue **parado**.
+> Verificar contra `home/nginx.conf` y `ss -tlnp` antes de dar por libre un
+> puerto. El skill `ovh` documenta el estado real de todo el stack del VPS.
 
 ## Notas de red
 
