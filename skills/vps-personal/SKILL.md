@@ -38,6 +38,7 @@ PCs: `git pull && ./install.sh`. No crear skills personales fuera del repo.
 
 - Gateway `home`: imagen `vps-index`, nginx con `network_mode: host`; proxy a AdGuard `:8443` y Hermes `:8642`/`:9119`.
 - Traceway: contenedor `traceway`, `/home/debian/app/traceway`, vhost tailnet `:8445`, volumen `traceway_traceway-data`, tope 2 GB. Sustituyó a SignOz el 18 oct 2026.
+- LiveSync (Obsidian): CouchDB 3.5.3 en `/home/debian/app/obsidian-livesync` (contenedor `livesync`, loopback 5984, BD `obsidiannotes`, creds en `.env` chmod 600). Proxy: sidecar `ts-livesync` → `https://livesync.tail3522d6.ts.net/` (IP tailnet propia `100.104.63.52`; el host NO resuelve MagicDNS — usar `--resolve` o extra_hosts). Cliente headless (imagen `livesync-cli` compilada de `~/Dev/obsidian-livesync`, servicio `cli` del compose) PENDIENTE de arrancar: replica inicial falla contra BD vacía sin causa visible; arrancar tras la primera carga del plugin. Vault materializado: `/home/debian/segundo-cerebro`.
 - Puertos libres: `8444`, `127.0.0.1:8080`, OTLP `4317`/`4318`.
 - Vigilante del índice: cron Hermes `index-servicios` (id `4457fa1e772b`, cada 30m, monitor `~/.hermes/scripts/services-monitor.sh`). Detecta servicios web nuevos en puertos del tailnet/contenedores; el agente agrega la entrada a `src/data/services.ts`, hace `./build.sh` y avisa en Telegram topic `alertas`. Servicios ambiguos (solo loopback, no web, transitorios) los consulta en vez de agregarlos.
 - `opencode` ajeno en `127.0.0.1:3000`: ejecuta comandos con `sudo`. Si algo cambia sin explicación, revisar `journalctl` del usuario `debian` y sus `COMMAND=` antes de atribuirlo a un fallo.
@@ -57,7 +58,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 ## Deploy de servicios nuevos
 
 - Patrón Node/sencillo: Dockerfile `node:24-slim` (o slim de la versión usada), compose con `build: .`, publish `"127.0.0.1:<PUERTO>:3000"`, `HOST: 0.0.0.0` dentro del container, volúmenes para datos/estado y `restart: unless-stopped`.
-- Acceso tailnet: `sudo tailscale serve --bg --https=<PUERTO_ALTO> http://127.0.0.1:<PUERTO>` (serve exige sudo). Puertos altos usados: 8443 lotion, 8444 link-in-bio.
+- Acceso tailnet: cada servicio se publica con un sidecar `tailscale/tailscale` del repo `~/app/ts-urls` (hostname propio, `serve/<nombre>.json` que proxifica a `127.0.0.1:<puerto>`, estado en `state/<nombre>`). La URL queda `https://<nombre>.tail3522d6.ts.net/` con cert válido. Commit + push del repo tras tocarlo. (`tailscale serve --bg` en el nodo principal ya no se usa; `serve status` da vacío.)
 - Verificar el serve con `curl --resolve <host.ts.net>:<puerto>:100.85.208.44 https://<host>.ts.net:<puerto>/`: curl contra `127.0.0.1:<puerto_serve>` da connection refused aunque el serve esté bien (solo escucha vía tailscaled, no en loopback).
 - Lanzar el contenedor con `docker compose create && docker compose start`, NO `compose up`: el hook de `terminal` marca `compose up` como proceso long-lived y lo bloquea en foreground aunque `-d` devuelva al instante.
 
