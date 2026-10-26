@@ -146,6 +146,11 @@ hay vhosts 8443/8445 en el gateway):
   ["web-hermes-dash.tail3522d6.ts.net:100.97.166.4"]` + regla ufw
   `allow from 172.16.0.0/12 to 100.97.166.4 port 443 proto tcp` (contenedor →
   tailnet, nunca hacia internet).
+- hermes-admin: las rutas de API (`/api/`, `/health/`, `/ws/v1`) van **directo
+  al Fastify (8445) por el sidecar**, NO vía rewrites de Next (los rewrites
+  rompieron POST por el proxy: 500). Websockets solo suben por HTTP/1.1: con
+  h2 (negociado por defecto) el upgrade da 404, un navegador wss funciona
+  normal. Probar con `curl --http1.1`.
 - Con puertos **no estándar**, usar `proxy_set_header Host $http_host;` (incluye
   el puerto). `$host` lo omite y apps que generan URLs propias (p.ej. Collabora)
   las construyen mal (sin `:PUERTO`).
