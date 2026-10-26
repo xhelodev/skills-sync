@@ -55,6 +55,21 @@ curl -sI http://100.85.208.44:<puerto>   # comprobar desde el tailnet
 journalctl _COMM=sudo --since "1 hour ago" | tail -50
 ```
 
+### Rotar la contraseña del dashboard de Hermes
+
+1. `hermes config set dashboard.basic_auth.password <nueva>` guarda el texto
+   plano pero NO regenera `password_hash`, y el dashboard autentica SOLO contra
+   el hash: sin el paso 2 el login sigue dando 401 aunque la config esté bien.
+2. Regenerar el hash en el mismo formato (`scrypt$16384$8$1$<salt_b64>$<dk_b64>`,
+   salt 16 bytes, dk 64 bytes) y aplicarlo con
+   `hermes config set dashboard.basic_auth.password_hash <hash>`.
+3. `systemctl --user restart hermes-dashboard.service` (es unit de **usuario**:
+   `sudo systemctl restart ...` falla con "Unit not found" aunque
+   `systemctl list-units` lo muestre). Esperar a que `/api/health` responda.
+4. Probar el login real antes de dar por hecho:
+   `POST /auth/password-login` con `{"provider":"basic","username":...,"password":...}`
+   → 200. 422 = falta `provider`; 401 = hash viejo aún cargado.
+
 ## Deploy de servicios nuevos
 
 - Patrón Node/sencillo: Dockerfile `node:24-slim` (o slim de la versión usada), compose con `build: .`, publish `"127.0.0.1:<PUERTO>:3000"`, `HOST: 0.0.0.0` dentro del container, volúmenes para datos/estado y `restart: unless-stopped`.
@@ -65,7 +80,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 ## Auto-deploy de repos (cron)
 
 - `~/scripts/auto-deploy.sh` (crontab cada 10 min, desfase `3-59/10`): para cada repo de `~/scripts/auto-deploy.conf` (`ruta|rama|comando`), detecta cambio comparando HEAD contra el **último SHA desplegado** (estado en `~/scripts/.auto-deploy.state/<repo>`, NO contra `origin`): si `origin/<rama>` avanzó → `git pull --ff-only`; si HEAD ≠ último desplegado (p.ej. push hecho desde el propio VPS, donde HEAD ya iguala a origin) → deploy igual. Vacío = `docker compose up -d --build`; `home` usaría `./build.sh`. Reintenta el deploy una vez tras 8 s si falla (conflicto transitorio de nombre de contenedor al recrear rápido). Log `~/scripts/auto-deploy.log`, aviso TG alias `github` solo al desplegar/fallar.
-- Repos activos: `mate-tv`, `catcore`. FUERA a propósito: `tailscale-sidecars` (sostiene los sidecars ts-*/Hermes) y `app/home` (su remoto `vps-index` ya no existe en GitHub; deploy manual con `./build.sh`).
+- Repos activos: `mate-tv`, `catcore`, `hermes-web`. FUERA a propósito: `tailscale-sidecars` (sostiene los sidecars ts-*/Hermes) y `app/home` (su remoto `vps-index` ya no existe en GitHub; deploy manual con `./build.sh`).
 - El script salta repos con cambios locales sin commitear y avisa (no pisa working trees).
 - Remotes en https con `gh auth setup-git` como credential helper (los `git@github.com:` fallan en cron sin agente SSH).
 
@@ -79,7 +94,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 ## Notificaciones Telegram
 
-- Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json` (bot @capy_notificator_bot, chat 589215): `alertas` (176817), `ssh` (176821, daemon ssh-notify.service), `seguridad` (176822), `uso` (176840, cuotas IA + vps-uso.sh), `updates` (176841, vps-updates + index-servicios), `github` (raíz 1763, PRs/auditorías).
+- Helper: `/usr/local/bin/tg-notify <alias> "texto (HTML)"`. Aliases en `/etc/tg/config.json` (bot @capy_notificator_bot, chat 589215): `alertas` (176817), `ssh` (176821, daemon ssh-notify.service), `seguridad` (176822), `uso` (176840, cuotas IA + vps-uso.sh), `updates` (176841, vps-updates + index-servicios), `github` (raíz 1763, PRs/auditorías), `hermes` (= alertas; sync/mirror de memoria). Antes de usar un alias nuevo, verificar que exista en config.json: si falta, tg-notify trata el alias como @handle y falla con "chat not found" sin aviso obvio.
 - Modo de hilo según el separador del valor del alias: `chat:raiz` = `message_thread_id` (hilos legacy); `chat@raiz` = `reply_to_message_id` (hilos nuevos con raíz creada por bot, que Telegram NO acepta como thread). tg-notify resuelve el alias él mismo vía config.json.
 - Alertas de servidor (crontab `~/scripts/vps-*.sh`, `disk-cleanup.sh`) van por `tg-notify`. Para avisos nuevos desde Hermes: enviar con `tg-notify` desde el script y dejar el delivery del cron en `local` (el deliver `telegram:chat:thread` de Hermes falla con threads que Telegram no tiene registrados).
 - PRs/auditorías de repos: crons `b017e613ba0c` (pr-review-dispatch.sh) y `7f88bf75e629` (repo-audit-dispatch.sh) notifican con `tg-notify github`; delivery en `local`. Los informes completos van como comentarios/issues en GitHub, no por Telegram.
