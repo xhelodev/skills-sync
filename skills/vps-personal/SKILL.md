@@ -39,7 +39,7 @@ PCs: `git pull && ./install.sh`. No crear skills personales fuera del repo.
 - Gateway `home`: imagen `vps-index`, nginx con `network_mode: host`; proxy a AdGuard `:8443` y Hermes `:8642`/`:9119`.
 - Traceway: contenedor `traceway`, `/home/debian/app/traceway`, vhost tailnet `:8445`, volumen `traceway_traceway-data`, tope 2 GB. Sustituyó a SignOz el 18 oct 2026.
 - LiveSync (Obsidian): **eliminado 2026-10-26** a petición del usuario (lápida completa en skill `ovh` §8.1); el puerto 5984 y el nodo tailnet `web-livesync` (100.104.63.52) quedaron libres. Lección que sí aplica: los sidecars se llaman `web-*` para quedar al final y diferenciarse de dispositivos reales (renombrados a web-* oct 2026; el rename conserva IP y re-emite cert solo, pero `tailscale serve` puede tardar ~1 min en propagar el DNSName tras `set --hostname`).
-- Puertos libres: `8444`, `127.0.0.1:8080`, OTLP `4317`/`4318`.
+- Puertos libres: OTLP `4317`/`4318` (8444/8445 ahora son de hermes-admin: web/api en loopback).
 - Vigilante del índice: cron Hermes `index-servicios` (id `4457fa1e772b`, cada 30m, monitor `~/.hermes/scripts/services-monitor.sh`). Detecta servicios web nuevos en puertos del tailnet/contenedores; el agente agrega la entrada a `src/data/services.ts`, hace `./build.sh` y avisa en Telegram topic `alertas`. Servicios ambiguos (solo loopback, no web, transitorios) los consulta en vez de agregarlos.
 - `opencode` ajeno en `127.0.0.1:3000`: ejecuta comandos con `sudo`. Si algo cambia sin explicación, revisar `journalctl` del usuario `debian` y sus `COMMAND=` antes de atribuirlo a un fallo.
 
@@ -64,7 +64,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 ## Auto-deploy de repos (cron)
 
-- `~/scripts/auto-deploy.sh` (crontab cada 10 min, desfase `3-59/10`): para cada repo de `~/scripts/auto-deploy.conf` (`ruta|rama|comando`), si `origin/<rama>` avanzó → `git pull --ff-only` + deploy (vacío = `docker compose up -d --build`; `home` usaría `./build.sh`). Log `~/scripts/auto-deploy.log`, aviso TG alias `github` solo al desplegar/fallar.
+- `~/scripts/auto-deploy.sh` (crontab cada 10 min, desfase `3-59/10`): para cada repo de `~/scripts/auto-deploy.conf` (`ruta|rama|comando`), detecta cambio comparando HEAD contra el **último SHA desplegado** (estado en `~/scripts/.auto-deploy.state/<repo>`, NO contra `origin`): si `origin/<rama>` avanzó → `git pull --ff-only`; si HEAD ≠ último desplegado (p.ej. push hecho desde el propio VPS, donde HEAD ya iguala a origin) → deploy igual. Vacío = `docker compose up -d --build`; `home` usaría `./build.sh`. Reintenta el deploy una vez tras 8 s si falla (conflicto transitorio de nombre de contenedor al recrear rápido). Log `~/scripts/auto-deploy.log`, aviso TG alias `github` solo al desplegar/fallar.
 - Repos activos: `mate-tv`, `catcore`. FUERA a propósito: `tailscale-sidecars` (sostiene los sidecars ts-*/Hermes) y `app/home` (su remoto `vps-index` ya no existe en GitHub; deploy manual con `./build.sh`).
 - El script salta repos con cambios locales sin commitear y avisa (no pisa working trees).
 - Remotes en https con `gh auth setup-git` como credential helper (los `git@github.com:` fallan en cron sin agente SSH).

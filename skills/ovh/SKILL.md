@@ -242,8 +242,8 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | 4001 | Catcore API `/api/v1` | contenedor catcore-api → `127.0.0.1:4001` | sidecar `ts-catcore`, handler `/api/` |
 | 4002 | Catcore MCP (http) | contenedor catcore-mcp → `127.0.0.1:4002` | loopback, sin publicar |
 | 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
-| 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | `127.0.0.1:8080` | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
-| 8081 | API del panel mate-tv | bind directo `100.85.208.44:8081` | tailnet |
+| 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | bind `0.0.0.0:8080` (ufw bloquea desde internet) | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
+| 8081 | API del panel mate-tv | `127.0.0.1:8081` | loopback (commit `eb70b7b` del repo lo movió desde la IP tailnet) |
 | 8446 | Traceway RUM | nginx `home` → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel `otel.carpincho.dev`) |
 | 8642 | Hermes API `/v1` | `127.0.0.1:8642` | sidecar `ts-hermes-api` (`web-hermes-api`) |
 | 9118 | `ts-dash-proxy` (nginx:alpine) | `127.0.0.1:9118` | loopback, interno |

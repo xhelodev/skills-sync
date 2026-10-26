@@ -12,8 +12,8 @@
 | Hermes API | 127.0.0.1:8642 | `~/.hermes` | Vía sidecar `ts-hermes-api` → `web-hermes-api` (100.72.215.102) |
 | Hermes Dashboard | 127.0.0.1:9119 (+ proxy interno 9118) | `~/.hermes` | Vía sidecar `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4) |
 | Traceway | 127.0.0.1:5080 | `/home/debian/app/traceway` | Vía sidecar `ts-traceway` → `web-traceway` (100.111.61.44); RUM público solo `/api/report` por CF Tunnel (8446); tope 2 GB |
-| obsidian-livesync | 127.0.0.1:5984 (CouchDB) | `/home/debian/app/obsidian-livesync` | Vía sidecar `ts-livesync` → `web-livesync` (100.104.63.52) |
-| mate-tv (panel) | 127.0.0.1:8080; API en 100.85.208.44:8081 | `/home/debian/Dev/mate-tv` | Panel público vía `tv.chelo.xyz` (CF Tunnel); API tailnet-only; sidecar `ts-mate-tv` |
+| Catcore | UI 127.0.0.1:4000, API 127.0.0.1:4001, MCP 127.0.0.1:4002 | `/home/debian/app/catcore` | Vía sidecar `ts-catcore` → `web-catcore` (100.106.180.64); handler `/api/` → `4001/api`. Auto-deploy desde GitHub |
+| mate-tv (panel) | panel `0.0.0.0:8080` (ufw bloquea desde internet); API `127.0.0.1:8081` | `/home/debian/Dev/mate-tv` | Panel público vía `tv.chelo.xyz` (CF Tunnel); API solo loopback desde commit `eb70b7b`; sidecar `ts-mate-tv`. Auto-deploy desde GitHub |
 | warp | 127.0.0.1:1080 (SOCKS) | contenedor `warp` | Solo loopback |
 | opencode | 127.0.0.1:3000 | — | Unit de usuario `opencode-serve` (`systemctl --user`); NO usa sudo; revisar `journalctl --user` |
 | OTLP | 4317, 4318 | — | Libres, para instrumentación |

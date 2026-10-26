@@ -113,7 +113,8 @@ hay vhosts 8443/8445 en el gateway):
 | `web-hermes-api` (100.72.215.102) | Hermes API | 127.0.0.1:8642 | sidecar `ts-hermes-api`; requiere `API_SERVER_KEY` (bearer) |
 | `web-hermes-dash` (100.97.166.4) | Hermes Dashboard | 127.0.0.1:9119 | sidecar `ts-hermes-dash` |
 | `web-catcore` (100.106.180.64) | Catcore (notas) | 127.0.0.1:4000 UI, 4001 API | sidecar `ts-catcore`; handler `/api/` → `4001/api` |
-| `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en 127.0.0.1:8080 (público vía `tv.chelo.xyz`, CF Tunnel) y API en 100.85.208.44:8081 |
+| `web-hermes-admin` (100.68.234.18) | Hermes Admin (cliente web de Hermes) | 127.0.0.1:8444 web, 8445 API | sidecar `ts-hermes-admin`; handler `/ws/v1` → `8445/ws/v1` (websocket); requiere `api/.env` completo para arrancar |
+| `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en `0.0.0.0:8080` (público vía `tv.chelo.xyz`, CF Tunnel; ufw bloquea 8080 desde internet) y API en `127.0.0.1:8081` (loopback, commit `eb70b7b` lo movió desde la IP tailnet) |
 
 **Loopback / otros**:
 
@@ -141,6 +142,10 @@ hay vhosts 8443/8445 en el gateway):
   `sudo ufw allow from 172.16.0.0/12 to 100.85.208.44 port <PUERTO> proto tcp`
 - Dentro de contenedores **MagicDNS no resuelve**; mapear el hostname con
   `extra_hosts: ["vps-9c2aefdf.tail3522d6.ts.net:100.85.208.44"]`.
+- hermes-admin (api) llama al dashboard en otro nodo: `extra_hosts:
+  ["web-hermes-dash.tail3522d6.ts.net:100.97.166.4"]` + regla ufw
+  `allow from 172.16.0.0/12 to 100.97.166.4 port 443 proto tcp` (contenedor →
+  tailnet, nunca hacia internet).
 - Con puertos **no estándar**, usar `proxy_set_header Host $http_host;` (incluye
   el puerto). `$host` lo omite y apps que generan URLs propias (p.ej. Collabora)
   las construyen mal (sin `:PUERTO`).
