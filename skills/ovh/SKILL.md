@@ -1,6 +1,6 @@
 ---
 name: ovh
-description: Opera y diagnostica el VPS personal "ovh" (nodo Tailscale vps-9c2aefdf, 100.85.208.44, SSH alias `ovh`) y todo lo que corre ahí dentro - OpenCode (servidor y CLI), Hermes (gateway y dashboard), Traceway, AdGuard Home, Docker, el gateway nginx/landing de Astro y Tailscale. Úsala para chequear estado, leer logs, reiniciar o actualizar servicios, y para saber qué NO tocar. Dispara con "ovh", "vps", "vps-9c2aefdf", "100.85.208.44", "ssh ovh", "opencode serve", "servidor de opencode", "hermes", "traceway", "adguard", "tailnet", "puerto 3000/5080/8081/8446/9119", "sidecar", "web-adguard", "web-livesync", "livesync", "mate-tv". NO aplica a Cloudflare, Wrangler ni al opencode de la máquina local.
+description: Opera y diagnostica el VPS personal "ovh" (nodo Tailscale vps-9c2aefdf, 100.85.208.44, SSH alias `ovh`) y todo lo que corre ahí dentro - OpenCode (servidor y CLI), Hermes (gateway y dashboard), Traceway, AdGuard Home, Docker, el gateway nginx/landing de Astro y Tailscale. Úsala para chequear estado, leer logs, reiniciar o actualizar servicios, y para saber qué NO tocar. Dispara con "ovh", "vps", "vps-9c2aefdf", "100.85.208.44", "ssh ovh", "opencode serve", "servidor de opencode", "hermes", "traceway", "adguard", "tailnet", "puerto 3000/5080/8081/8446/9119", "sidecar", "web-adguard", "mate-tv". NO aplica a Cloudflare, Wrangler ni al opencode de la máquina local.
 ---
 
 # Operar el VPS `ovh` (vps-9c2aefdf)
@@ -196,7 +196,7 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 > se quiere publicar OpenCode, elegir un puerto tailnet libre consultando el
 > §8 y `home/nginx.conf` (que ya solo escucha 80/443 y 127.0.0.1:8446), o
 > mejor, seguir el patrón actual de **sidecar Tailscale** (`ts-<servicio>`)
-> que usan adguard/traceway/hermes/livesync. El ejemplo histórico del vhost en
+> que usan adguard/traceway/hermes. El ejemplo histórico del vhost en
 > 8080 quedó obsoleto y se retiró de esta skill para evitar colisiones.
 
 > Ojo: cualquiera en el tailnet podría alcanzarlo; el server sigue protegido por el
@@ -226,8 +226,7 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 > publica con **sidecars Tailscale por servicio** (contenedores `ts-*` con
 > identidad propia en el tailnet): `ts-adguard` → nodo `web-adguard`
 > (100.86.45.71), `ts-hermes-api` → `web-hermes-api` (100.72.215.102),
-> `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-livesync` →
-> `web-livesync` (100.104.63.52), `ts-traceway` → `web-traceway`
+> `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-traceway` → `web-traceway`
 > (100.111.61.44) y `ts-mate-tv` (red de mate-tv). Los vhosts 8443 y 8445
 > **ya no existen**.
 
@@ -240,13 +239,20 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | 3000 | OpenCode server | `127.0.0.1:3000` | **loopback** (túnel SSH) |
 | 3001 | AdGuard UI | contenedor adguardhome → `127.0.0.1:3001` | sidecar `ts-adguard` (`web-adguard`) |
 | 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
-| 5984 | obsidian-livesync (CouchDB) | contenedor livesync → `127.0.0.1:5984` | sidecar `ts-livesync` (`web-livesync`) |
 | 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | `127.0.0.1:8080` | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
 | 8081 | API del panel mate-tv | bind directo `100.85.208.44:8081` | tailnet |
 | 8446 | Traceway RUM | nginx `home` → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel `otel.carpincho.dev`) |
 | 8642 | Hermes API `/v1` | `127.0.0.1:8642` | sidecar `ts-hermes-api` (`web-hermes-api`) |
 | 9118 | `ts-dash-proxy` (nginx:alpine) | `127.0.0.1:9118` | loopback, interno |
 | 9119 | Hermes Dashboard | `127.0.0.1:9119` | sidecar `ts-hermes-dash` (`web-hermes-dash`) |
+
+### 8.1 Obsidian LiveSync (eliminado 2026-10-26)
+
+> Desmontado a petición del usuario: contenedores (`livesync`, `ts-livesync`,
+> `livesync-cli`), stack `~/app/obsidian-livesync`, repo `~/Dev/obsidian-livesync`,
+> vault `~/segundo-cerebro`, skill `note-taking/obsidian` y el backup
+> `~/backups/obsidian-20261025-234758` fueron borrados. No intentar reinstalarlo
+> ni buscar sus rutas; el puerto 5984 y el nodo tailnet `web-livesync` quedaron libres.
 
 ## 9. Troubleshooting
 

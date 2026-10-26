@@ -112,7 +112,6 @@ hay vhosts 8443/8445 en el gateway):
 | `web-traceway` (100.111.61.44) | Traceway UI+OTLP | 127.0.0.1:5080 | sidecar `ts-traceway` |
 | `web-hermes-api` (100.72.215.102) | Hermes API | 127.0.0.1:8642 | sidecar `ts-hermes-api`; requiere `API_SERVER_KEY` (bearer) |
 | `web-hermes-dash` (100.97.166.4) | Hermes Dashboard | 127.0.0.1:9119 | sidecar `ts-hermes-dash` |
-| `web-livesync` (100.104.63.52) | obsidian-livesync | 127.0.0.1:5984 | sidecar `ts-livesync` |
 | `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en 127.0.0.1:8080 (público vía `tv.chelo.xyz`, CF Tunnel) y API en 100.85.208.44:8081 |
 
 **Loopback / otros**:
@@ -122,7 +121,6 @@ hay vhosts 8443/8445 en el gateway):
 | 3000 | OpenCode server | túnel SSH; sin publicar a propósito |
 | 1080 | proxy SOCKS `warp` | solo loopback |
 | 9118 | `ts-dash-proxy` (nginx:alpine) | interno |
-| 5984 | CouchDB livesync | solo loopback, expuesto vía sidecar |
 | 8080 / 8081 | panel / API de mate-tv | **NO libres** |
 
 > **Eliminado del registro (verificado inexistente el 25 oct 2026):** Lotion
