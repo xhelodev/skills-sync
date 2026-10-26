@@ -36,7 +36,8 @@ Arquitectura (desde 2026-10-26):
 | Qué | Dónde |
 | --- | --- |
 | Sync bidireccional (cron `*/10`) | `~/scripts/hermes-sync.sh` → log `~/scripts/hermes-sync.log` |
-| Espejo catcore (cron horario) | `~/scripts/catcore-mirror.sh` → log `~/scripts/catcore-mirror.log` |
+| Espejo catcore (cron horario) | `~/scripts/catcore-mirror.sh` → log `~/scripts/catcore-mirror.log`. Además de las 3 notas de memoria, cada fichero útil de `backup/` va como nota individual `Hermes · Backup · <ruta>` (crons, scripts, planes, pr-reviewer; NO skills — ya están en skills-shared) |
+| Alias TG | `hermes` en `/etc/tg/config.json` → hilo `alertas` (creado 2026-10-26; antes no existía y los avisos de sync se perdían) |
 | Repo | `~/hermes-memory` → `github.com/xhelodev/hermes-memory` (privado) |
 | Notas en catcore | `Hermes · Memoria`, `Hermes · Perfil usuario`, `Hermes · Skills y crons` |
 | Backup ampliado (2026-10-26) | además de memories/, `rsync -a --delete` one-way local→repo: `~/.hermes/{cron,scripts,plans}` y `profiles/pr-reviewer/{skills,cron,memories,plans,SOUL.md,*.sh}` → `backup/` en el repo. Excluye `*.db*`, `*.log`, `output/`, `cache/` (secretos y estado). Requiere `rsync` (instalado apt 2026-10-26). |
@@ -61,3 +62,9 @@ Arquitectura (desde 2026-10-26):
    la edición remota es importante.
 3. Si `tg-notify` repite avisos de conflicto, revisar `git log` del repo antes
    de forzar nada: el estado `.state` marca qué hash se considera sincronizado.
+4. `search_notes` de catcore NO es fiable para idempotencia (una corrida no
+   encontró notas existentes y creó 15 duplicados). El mirror busca por
+   `list_notes(folderId)` — no volver a usar FTS para esto.
+5. En rsync, specs de ARCHIVO suelto no llevan `/` final: `"$src"/ "$dst"/`
+   falla con "Not a directory". El sync script distingue dir (con --delete) de
+   fichero (directo).
