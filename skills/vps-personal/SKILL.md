@@ -62,12 +62,19 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 - Verificar el serve con `curl --resolve <host.ts.net>:<puerto>:100.85.208.44 https://<host>.ts.net:<puerto>/`: curl contra `127.0.0.1:<puerto_serve>` da connection refused aunque el serve esté bien (solo escucha vía tailscaled, no en loopback).
 - Lanzar el contenedor con `docker compose create && docker compose start`, NO `compose up`: el hook de `terminal` marca `compose up` como proceso long-lived y lo bloquea en foreground aunque `-d` devuelva al instante.
 
+## Auto-deploy de repos (cron)
+
+- `~/scripts/auto-deploy.sh` (crontab cada 10 min, desfase `3-59/10`): para cada repo de `~/scripts/auto-deploy.conf` (`ruta|rama|comando`), si `origin/<rama>` avanzó → `git pull --ff-only` + deploy (vacío = `docker compose up -d --build`; `home` usaría `./build.sh`). Log `~/scripts/auto-deploy.log`, aviso TG alias `github` solo al desplegar/fallar.
+- Repos activos: `mate-tv`, `catcore`. FUERA a propósito: `tailscale-sidecars` (sostiene los sidecars ts-*/Hermes) y `app/home` (su remoto `vps-index` ya no existe en GitHub; deploy manual con `./build.sh`).
+- El script salta repos con cambios locales sin commitear y avisa (no pisa working trees).
+- Remotes en https con `gh auth setup-git` como credential helper (los `git@github.com:` fallan en cron sin agente SSH).
+
 ## Quirks del host
 
 - Node se gestiona con nvm (`~/.nvm`): NO está en el PATH de sesiones no interactivas (scripts, cron, unit de systemd). Usar `source ~/.nvm/nvm.sh` o la ruta absoluta `~/.nvm/versions/node/<versión>/bin/node`. Default: v24 LTS.
-- Chromium local roto (exit 127, falta `libnspr4.so`): `browser_exec` y las capturas fallan; usar `curl`/`web_extract`.
+- Sin navegador local (Chromium desinstalado, antes roto por `libnspr4.so`): `browser_exec` y capturas no disponibles en este host; usar `curl`/`web_extract`.
 - Docker 29.9.1 activo, ~7 GB RAM: válido para servicios de prueba (comprobar disco con `df -h /` antes de algo grande).
-- TTS: el proveedor edge por defecto da 403. Usar `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural`, convertir con `~/.hermes/tools/ffmpeg-9.0.1-linux-x64/bin/ffmpeg` a ogg/opus y enviar como nota de voz.
+- TTS: voz edge ya configurada a `es-ES-AlvaroNeural` en config.yaml (25 oct 2026); `text_to_speech` funciona directo. Fallback manual: `~/.local/bin/edge-tts --voice es-ES-AlvaroNeural` + ffmpeg de `~/.hermes/tools`.
 - Hermes se auto-actualiza vía `vps-updates.sh` (crontab 05:30 diario): `hermes update --check` imprime `Up to date ... (stable vX)` también cuando está al día, así que detectar con `grep -qi 'up to date'`, nunca comparando versiones extraídas. Si hay versión nueva aplica `hermes update --yes` (instalación git; reinicia el gateway por defecto) y avisa por el hilo `updates` con `vX → vY`; si falla, avisa el error.
 
 ## Notificaciones Telegram
