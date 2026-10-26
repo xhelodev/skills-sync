@@ -227,8 +227,8 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 > identidad propia en el tailnet): `ts-adguard` → nodo `web-adguard`
 > (100.86.45.71), `ts-hermes-api` → `web-hermes-api` (100.72.215.102),
 > `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-traceway` → `web-traceway`
-> (100.111.61.44) y `ts-mate-tv` (red de mate-tv). Los vhosts 8443 y 8445
-> **ya no existen**.
+> (100.111.61.44), `ts-catcore` → `web-catcore` (100.106.180.64) y `ts-mate-tv`
+> (red de mate-tv). Los vhosts 8443 y 8445 **ya no existen**.
 
 | Puerto | Qué | Backend | Alcance |
 | --- | --- | --- | --- |
@@ -238,6 +238,9 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | 1080 | proxy SOCKS `warp` | contenedor warp → `127.0.0.1:1080` | loopback |
 | 3000 | OpenCode server | `127.0.0.1:3000` | **loopback** (túnel SSH) |
 | 3001 | AdGuard UI | contenedor adguardhome → `127.0.0.1:3001` | sidecar `ts-adguard` (`web-adguard`) |
+| 4000 | Catcore UI (notas, raíz) | contenedor catcore-web → `127.0.0.1:4000` | sidecar `ts-catcore` (`web-catcore`) |
+| 4001 | Catcore API `/api/v1` | contenedor catcore-api → `127.0.0.1:4001` | sidecar `ts-catcore`, handler `/api/` |
+| 4002 | Catcore MCP (http) | contenedor catcore-mcp → `127.0.0.1:4002` | loopback, sin publicar |
 | 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
 | 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | `127.0.0.1:8080` | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
 | 8081 | API del panel mate-tv | bind directo `100.85.208.44:8081` | tailnet |

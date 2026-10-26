@@ -112,6 +112,7 @@ hay vhosts 8443/8445 en el gateway):
 | `web-traceway` (100.111.61.44) | Traceway UI+OTLP | 127.0.0.1:5080 | sidecar `ts-traceway` |
 | `web-hermes-api` (100.72.215.102) | Hermes API | 127.0.0.1:8642 | sidecar `ts-hermes-api`; requiere `API_SERVER_KEY` (bearer) |
 | `web-hermes-dash` (100.97.166.4) | Hermes Dashboard | 127.0.0.1:9119 | sidecar `ts-hermes-dash` |
+| `web-catcore` (100.106.180.64) | Catcore (notas) | 127.0.0.1:4000 UI, 4001 API | sidecar `ts-catcore`; handler `/api/` → `4001/api` |
 | `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en 127.0.0.1:8080 (público vía `tv.chelo.xyz`, CF Tunnel) y API en 100.85.208.44:8081 |
 
 **Loopback / otros**:
@@ -143,6 +144,10 @@ hay vhosts 8443/8445 en el gateway):
 - Con puertos **no estándar**, usar `proxy_set_header Host $http_host;` (incluye
   el puerto). `$host` lo omite y apps que generan URLs propias (p.ej. Collabora)
   las construyen mal (sin `:PUERTO`).
+- `tailscale serve` con handler de **path** quita el prefijo al proxificar:
+  `/api/ → http://127.0.0.1:4001` llega al backend como `/v1/...`. Para
+  conservarlo, repetir el path en el destino: `"Proxy": "http://127.0.0.1:4001/api"`.
+  (Los handlers de puerto `:PUERTO` sí preservan el path completo.)
 
 ## Proyectos
 

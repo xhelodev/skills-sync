@@ -58,7 +58,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 ## Deploy de servicios nuevos
 
 - Patrón Node/sencillo: Dockerfile `node:24-slim` (o slim de la versión usada), compose con `build: .`, publish `"127.0.0.1:<PUERTO>:3000"`, `HOST: 0.0.0.0` dentro del container, volúmenes para datos/estado y `restart: unless-stopped`.
-- Acceso tailnet: cada servicio se publica con un sidecar `tailscale/tailscale` del repo `~/app/ts-urls` (hostname propio, `serve/<nombre>.json` que proxifica a `127.0.0.1:<puerto>`, estado en `state/<nombre>`). La URL queda `https://<nombre>.tail3522d6.ts.net/` con cert válido. Commit + push del repo tras tocarlo. (`tailscale serve --bg` en el nodo principal ya no se usa; `serve status` da vacío.)
+- Acceso tailnet: cada servicio se publica con un sidecar `tailscale/tailscale` del repo `~/app/ts-urls` (GitHub `xhelodev/tailscale-sidecars`) (hostname propio, `serve/<nombre>.json` que proxifica a `127.0.0.1:<puerto>`, estado en `state/<nombre>`). La URL queda `https://<nombre>.tail3522d6.ts.net/` con cert válido. Commit + push del repo tras tocarlo. (`tailscale serve --bg` en el nodo principal ya no se usa; `serve status` da vacío.)
 - Verificar el serve con `curl --resolve <host.ts.net>:<puerto>:100.85.208.44 https://<host>.ts.net:<puerto>/`: curl contra `127.0.0.1:<puerto_serve>` da connection refused aunque el serve esté bien (solo escucha vía tailscaled, no en loopback).
 - Lanzar el contenedor con `docker compose create && docker compose start`, NO `compose up`: el hook de `terminal` marca `compose up` como proceso long-lived y lo bloquea en foreground aunque `-d` devuelva al instante.
 
