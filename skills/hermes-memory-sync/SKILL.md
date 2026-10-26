@@ -39,6 +39,7 @@ Arquitectura (desde 2026-10-26):
 | Espejo catcore (cron horario) | `~/scripts/catcore-mirror.sh` → log `~/scripts/catcore-mirror.log` |
 | Repo | `~/hermes-memory` → `github.com/xhelodev/hermes-memory` (privado) |
 | Notas en catcore | `Hermes · Memoria`, `Hermes · Perfil usuario`, `Hermes · Skills y crons` |
+| Backup ampliado (2026-10-26) | además de memories/, `rsync -a --delete` one-way local→repo: `~/.hermes/{cron,scripts,plans,attachments}` y `profiles/pr-reviewer/{skills,cron,memories,plans,SOUL.md,*.sh}` → `backup/` en el repo. Excluye `*.db*`, `*.log`, `output/`, `cache/` (secretos y estado). Requiere `rsync` (instalado apt 2026-10-26). |
 
 ## Detalles operativos
 
