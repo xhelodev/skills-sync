@@ -118,9 +118,10 @@ PY
   assert_rc "check verde (repo + lock coherentes)" 0 "$S" check
 
   # link: crea enlaces, idempotente
-  assert_rc "link corre" 0 "$S" link
-  "$S" link 2>&1 | grep -q "no existe ~/.local/bin" \
-    && pass "link: avisa PATH faltante" || fail "link: aviso PATH faltante"
+  local lout lrc
+  lout="$("$S" link 2>&1)"; lrc=$?
+  ok_if "link corre" "$lrc"
+  [[ $lout == *"no existe ~/.local/bin"* ]] && pass "link: avisa PATH faltante" || fail "link: aviso PATH faltante"
   local n1
   n1="$(ls "$IH/.claude/skills" 2>/dev/null | wc -l)"
   ok_if "link: enlaces creados ($n1)" "$([[ $n1 -gt 0 ]] && echo 0 || echo 1)"
