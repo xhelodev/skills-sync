@@ -117,6 +117,7 @@ skillsync sync                 mis ediciones: check + secretos + commit + push +
 skillsync status               vista rápida: repo, enlaces, terceros, último update
 skillsync check                auditoría: frontmatter, colisiones, manifest, enlaces
 skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
+skillsync repair [ruta]        rebase trabado por borrado upstream: acepta el borrado (con backup)
 skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
@@ -137,6 +138,10 @@ skillsync timer install        timer systemd user cada 30 min (update --pull-onl
 - **¿Cómo está todo?**: `skillsync status` (rápido) o `skillsync check` (completo).
 - **En las otras máquinas**: el timer trae los cambios solo (cada 30 min en el VPS).
   A mano: `skillsync update`.
+- **Un pull quedó trabado en conflicto** (upstream borró algo que tu commit
+  tocaba): `skillsync repair` — acepta el borrado, guarda tus cambios en un tag
+  `backup-pre-rebase-*` y termina el rebase. Si el conflicto es de contenido,
+  no toca nada y te dice cómo resolverlo a mano.
 
 ## Skills de terceros
 
