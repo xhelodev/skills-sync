@@ -4,14 +4,6 @@ Fuente única de **skills personales**, **skills de terceros** (manifest) y
 **definiciones MCP**, sincronizada entre PCs (Windows/Linux) y todos los agentes:
 **Claude Code, OpenCode, Cursor, Codex, Hermes y pi**.
 
-Principios:
-
-- **Una copia física por skill por máquina**: los agentes lo ven por symlink
-  (pi: por settings). Editar una vez cambia para todos al instante.
-- **Terceros los enlaza el CLI `npx skills`** (vercel-labs) en `~/.agents/skills`;
-  acá solo se *manifiestan* y auditan. Nunca se auto-actualizan en silencio.
-- `~/.claude/skills/synced/` lo gestiona claude.ai — **no se toca**.
-
 ## Instalación
 
 ### Prerrequisitos
@@ -103,6 +95,14 @@ rm -f ~/.local/bin/skillsync
 # borrá ~/skills-shared recién cuando estés seguro: es tu única copia
 ```
 
+Principios:
+
+- **Una copia física por skill por máquina**: los agentes lo ven por symlink
+  (pi: por settings). Editar una vez cambia para todos al instante.
+- **Terceros los enlaza el CLI `npx skills`** (vercel-labs) en `~/.agents/skills`;
+  acá solo se *manifiestan* y auditan. Nunca se auto-actualizan en silencio.
+- `~/.claude/skills/synced/` lo gestiona claude.ai — **no se toca**.
+
 ## Estructura
 
 ```
@@ -143,20 +143,6 @@ skillsync timer install        timer systemd user cada 30 min (update --pull-onl
 - **¿Cómo está todo?**: `skillsync status` (rápido) o `skillsync check` (completo).
 - **En las otras máquinas**: el timer trae los cambios solo (cada 30 min en el VPS).
   A mano: `skillsync update`.
-
-## PC nueva (2 pasos)
-
-```bash
-# 1. bootstrap (gist público; usa gh o pide PAT de solo lectura, nunca lo guarda)
-curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
-
-# 2. instalar todo (personales + terceros + MCP)
-skillsync install && skillsync manifest && skillsync timer install
-```
-
-El instalador escribe la etiqueta de máquina (`~/.config/skillsync/machine`).
-Forzar: `SKILLSYNC_MACHINE=vps skillsync …`. Las etiquetas actuales: `vps`,
-`pc` (Windows).
 
 ## Skills de terceros
 
