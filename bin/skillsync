@@ -333,6 +333,17 @@ cmd_link() {
     [[ $DRY == 1 ]] && echo "  (dry) ln -s $SELF $HOME/.local/bin/skillsync" || ln -sfn "$SELF" "$HOME/.local/bin/skillsync"
   fi
 
+  # aviso de PATH (sin tocar rc-files: imprimimos la línea exacta para pegar)
+  if [[ -d $HOME/.local/bin ]]; then
+    if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+      echo "WARN  ~/.local/bin no está en tu PATH — agregá a tu ~/.bashrc o ~/.zshrc:"
+      echo '        export PATH="$HOME/.local/bin:$PATH"'
+      echo "        (y reabrí la shell; mientras tanto: $REPO/bin/skillsync)"
+    fi
+  else
+    echo "WARN  no existe ~/.local/bin — el comando no queda en el PATH (usá $REPO/bin/skillsync)"
+  fi
+
   # agentes symlink: asegurar dir de skills
   local i
   for i in "${!AGENT_NAMES[@]}"; do

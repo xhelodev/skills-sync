@@ -119,6 +119,8 @@ PY
 
   # link: crea enlaces, idempotente
   assert_rc "link corre" 0 "$S" link
+  "$S" link 2>&1 | grep -q "no existe ~/.local/bin" \
+    && pass "link: avisa PATH faltante" || fail "link: aviso PATH faltante"
   local n1
   n1="$(ls "$IH/.claude/skills" 2>/dev/null | wc -l)"
   ok_if "link: enlaces creados ($n1)" "$([[ $n1 -gt 0 ]] && echo 0 || echo 1)"

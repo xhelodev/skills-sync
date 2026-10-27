@@ -12,6 +12,97 @@ Principios:
   acá solo se *manifiestan* y auditan. Nunca se auto-actualizan en silencio.
 - `~/.claude/skills/synced/` lo gestiona claude.ai — **no se toca**.
 
+## Instalación
+
+### Prerrequisitos
+
+| Herramienta | Obligatoria | Para qué | Verificar |
+|---|---|---|---|
+| git | sí | clonar y actualizar el repo | `git --version` |
+| bash ≥ 4 | sí | corre `skillsync` | `bash --version` |
+| python3 | sí | manifest, MCP y settings de pi | `python3 --version` |
+| node + npx | si usás skills de terceros | `npx skills`, `skill-lint` | `npx --version` |
+| gh | recomendado | clonar el repo privado sin líos | `gh auth status` |
+| systemd (user) | no | el timer de auto-update | `systemctl --user status` |
+
+El repo es **privado**: sin credenciales (`gh auth login` o SSH key) el clone falla.
+
+### Flujo 1 — PC nueva (desde cero)
+
+```bash
+# 1. autenticación GitHub (si no la tenés)
+gh auth login
+
+# 2. bootstrap: clona el repo a ~/skills-shared y corre install.sh (= skillsync link)
+curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
+
+# 3. instalar TODO: terceros del manifest (escaneados con skill-lint) + MCP + herramientas
+skillsync install
+
+# 4. etiquetar la máquina (una vez; el bootstrap nuevo ya lo hace)
+echo vps > ~/.config/skillsync/machine
+
+# 5. (opcional) auto-update cada 30 min
+skillsync timer install
+```
+
+Qué hace `install`: `link` (symlinks en los agentes que detecte, backups de lo
+que reemplace, symlink del comando en `~/.local/bin`) + aplica `third-party.yaml`
+con el gate de skill-lint + MCP + herramientas faltantes.
+
+### Flujo 2 — ya tenés el repo
+
+```bash
+git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
+~/skills-shared/bin/skillsync install
+```
+
+### Qué se crea y dónde
+
+| Ruta | Qué es |
+|---|---|
+| `~/skills-shared` | el repo (skills + skills-local gitignored) |
+| `~/.local/bin/skillsync` | symlink al comando |
+| `~/.config/skillsync/machine` | etiqueta de máquina (`vps`, `pc`, …) |
+| `~/.local/state/skillsync/` | resultado del último update |
+| `~/.skillsync/backups/<agente>/` | backups de skills reemplazados (últimos 5) |
+| `~/.claude/skills`, `~/.config/opencode/skills`, `~/.cursor/skills`, `~/.codex/skills`, `~/.hermes/skills` | symlinks por agente |
+| `~/.pi/settings.json` | pi: sin symlinks — agrega `skills: [...]` |
+
+### Verificar que quedó bien
+
+```bash
+skillsync --help                                # el comando responde
+skillsync check                                 # sin FALLA ni enlaces rotos
+ls -l ~/.claude/skills | head                   # symlinks → ~/skills-shared
+systemctl --user list-timers | grep skillsync   # si activaste el timer
+```
+
+### Troubleshooting
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| `skillsync: command not found` | `~/.local/bin` no está en el PATH | agregá `export PATH="$HOME/.local/bin:$PATH"` a tu `~/.bashrc` o `~/.zshrc` y reabrí la shell (o llamá directo `~/skills-shared/bin/skillsync`) |
+| `Permission denied (publickey)` / pide usuario y contraseña al clonar | sin credenciales para el repo privado | `gh auth login` (o SSH key en GitHub) |
+| se cuelga o falla al preguntar | sin TTY (cron, script) | correr desde un terminal; los pasos interactivos son `install` (terceros faltantes) y `add` |
+| `npx: command not found` | falta node | instalalo, o ignoralo si no querés skills de terceros |
+| un agente no ve un skill | symlink roto o reemplazado | `skillsync check` y después `skillsync link` |
+
+### Desinstalar
+
+```bash
+skillsync timer uninstall     # si activaste el timer
+# borrar los symlinks que apuntan al repo, en cada agente:
+for a in ~/.claude/skills ~/.config/opencode/skills ~/.cursor/skills ~/.codex/skills ~/.hermes/skills; do
+  find "$a" -maxdepth 1 -type l 2>/dev/null | while read -r l; do
+    [[ "$(readlink "$l")" == "$HOME/skills-shared/"* ]] && rm "$l"
+  done
+done
+rm -f ~/.local/bin/skillsync
+# lo reemplazado por symlink está en ~/.skillsync/backups/
+# borrá ~/skills-shared recién cuando estés seguro: es tu única copia
+```
+
 ## Estructura
 
 ```
