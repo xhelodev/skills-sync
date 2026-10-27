@@ -24,6 +24,9 @@
 set -euo pipefail
 shopt -s nullglob
 
+# regex de secretos (se aplica solo a skills/ y mcp/, jamás a bin/ que la define)
+SECRET_RE='ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY'
+
 main() {
   local SELF REPO MACHINE LIB STATE_DIR BIN_LINK
   SELF="$(readlink -f "$0")"
@@ -32,8 +35,7 @@ main() {
   MACHINE="$(_machine_tag)"
   STATE_DIR="$HOME/.local/state/skillsync"
 
-  # regex de secretos (se aplica solo a skills/ y mcp/, jamás a bin/ que la define)
-  local SECRET_RE='ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY'
+  # regex de secretos: ahora es constante global (ver arriba)
 
   local DRY=0
   local cmd="${1:-help}"
@@ -683,6 +685,7 @@ gate_summary() {
     echo "     → verificá estos skills a mano antes de instalarlos."
   fi
   [[ ${#GATE_ERR[@]} -gt 0 ]] && printf '  errores de lint    : %s\n' "${GATE_ERR[*]}"
+  return 0
 }
 
 cmd_add() { # skillsync add <owner/repo> [--skill nombre] [--yes-warn] | add --from-file <archivo>

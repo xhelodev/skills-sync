@@ -22,6 +22,7 @@ skills/<nombre>/SKILL.md  skills personales (.machines / .targets opcionales)
 skills-local/             gitignored — skills privados: se enlazan pero NUNCA se commitean
 third-party.yaml          manifest de terceros (generado: `skillsync manifest`)
 mcp/servers.json          servidores MCP SIN secretos ("$VAR" del entorno local)
+tests/run.sh              suite de tests (unit + integración, sin dependencias)
 install.sh                wrapper retrocompatible → `skillsync link`
 ```
 
@@ -127,6 +128,18 @@ queda registrado en `status` (resolver con `skillsync sync`).
 
 `mcp/servers.json` sin secretos (`"$MI_VAR"` se resuelve del entorno al aplicar).
 `skillsync mcp` los aplica a Claude Code (scope user). OpenCode y Hermes: manual.
+
+## Tests
+
+```bash
+tests/run.sh          # todo (35 tests)
+tests/run.sh unit     # funciones: gate, machine_matches, fm_field, SECRET_RE, manifest
+tests/run.sh integ    # link/check/adopt/update/sync/add/pi con HOME aislado + origin local
+```
+
+Sin dependencias y sin red: cada test corre con un `HOME` falso, el remote
+apuntado a un repo bare local y `npx` reemplazado por un shim. Si tocás
+`bin/skillsync`, corrí la suite antes de pushear.
 
 ## Notas
 
