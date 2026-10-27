@@ -1,4 +1,4 @@
-# skills-shared + skillsync
+# skills-sync + skillsync
 
 Fuente única de **skills personales**, **skills de terceros** (manifest) y
 **definiciones MCP**, sincronizada entre PCs (Windows/Linux) y todos los agentes:
@@ -27,7 +27,7 @@ Con `gh` autenticado (`gh auth login`) o tu clave SSH en GitHub:
 curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
 ```
 
-Clona el repo a `~/skills-shared`, etiqueta la máquina, enlaza tus skills en
+Clona el repo a `~/skills-sync`, etiqueta la máquina, enlaza tus skills en
 todos los agentes que encuentre y corre `skillsync install` (terceros del
 manifest con gate de skill-lint + MCP + herramientas). Sin terminal interactiva
 (CI), los terceros quedan pendientes: `skillsync install` en una terminal los completa.
@@ -38,15 +38,15 @@ destino custom: `... | bash -s -- ~/otra-ruta`.
 ### Flujo 2 — ya tenés el repo
 
 ```bash
-git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
-~/skills-shared/bin/skillsync install
+git clone https://github.com/xhelodev/skills-shared.git ~/skills-sync
+~/skills-sync/bin/skillsync install
 ```
 
 ### Qué se crea y dónde
 
 | Ruta | Qué es |
 |---|---|
-| `~/skills-shared` | el repo (skills + skills-local gitignored) |
+| `~/skills-sync` | el repo (skills + skills-local gitignored) |
 | `~/.local/bin/skillsync` | symlink al comando |
 | `~/.config/skillsync/machine` | etiqueta de máquina (`vps`, `pc`, …) |
 | `~/.local/state/skillsync/` | resultado del último update |
@@ -59,7 +59,7 @@ git clone https://github.com/xhelodev/skills-shared.git ~/skills-shared
 ```bash
 skillsync --help                                # el comando responde
 skillsync check                                 # sin FALLA ni enlaces rotos
-ls -l ~/.claude/skills | head                   # symlinks → ~/skills-shared
+ls -l ~/.claude/skills | head                   # symlinks → ~/skills-sync
 systemctl --user list-timers | grep skillsync   # si activaste el timer
 ```
 
@@ -67,7 +67,7 @@ systemctl --user list-timers | grep skillsync   # si activaste el timer
 
 | Síntoma | Causa | Solución |
 |---|---|---|
-| `skillsync: command not found` | `~/.local/bin` no está en el PATH | agregá `export PATH="$HOME/.local/bin:$PATH"` a tu `~/.bashrc` o `~/.zshrc` y reabrí la shell (o llamá directo `~/skills-shared/bin/skillsync`) |
+| `skillsync: command not found` | `~/.local/bin` no está en el PATH | agregá `export PATH="$HOME/.local/bin:$PATH"` a tu `~/.bashrc` o `~/.zshrc` y reabrí la shell (o llamá directo `~/skills-sync/bin/skillsync`) |
 | `Permission denied (publickey)` / pide usuario y contraseña al clonar | sin credenciales para el repo privado | `gh auth login` (o SSH key en GitHub) |
 | se cuelga o falla al preguntar | sin TTY (cron, script) | correr desde un terminal; los pasos interactivos son `install` (terceros faltantes) y `add` |
 | `npx: command not found` | falta node | instalalo, o ignoralo si no querés skills de terceros |
@@ -80,12 +80,12 @@ skillsync timer uninstall     # si activaste el timer
 # borrar los symlinks que apuntan al repo, en cada agente:
 for a in ~/.claude/skills ~/.config/opencode/skills ~/.cursor/skills ~/.codex/skills ~/.hermes/skills; do
   find "$a" -maxdepth 1 -type l 2>/dev/null | while read -r l; do
-    [[ "$(readlink "$l")" == "$HOME/skills-shared/"* ]] && rm "$l"
+    [[ "$(readlink "$l")" == "$HOME/skills-sync/"* ]] && rm "$l"
   done
 done
 rm -f ~/.local/bin/skillsync
 # lo reemplazado por symlink está en ~/.skillsync/backups/
-# borrá ~/skills-shared recién cuando estés seguro: es tu única copia
+# borrá ~/skills-sync recién cuando estés seguro: es tu única copia
 ```
 
 Principios:
@@ -211,7 +211,7 @@ queda registrado en `status` (resolver con `skillsync sync`).
 | cursor | `~/.cursor` | `~/.cursor/skills` | symlink |
 | codex | `~/.codex` | `~/.codex/skills` | symlink |
 | hermes | `~/.hermes` | `~/.hermes/skills` | symlink (hermes gestiona su dir: solo enlaces planos, no reordenar) |
-| pi | `~/.pi` | `~/.pi/settings.json` | settings (`skills: [~/skills-shared/skills]`; también lee `~/.agents/skills` nativamente) |
+| pi | `~/.pi` | `~/.pi/settings.json` | settings (`skills: [~/skills-sync/skills]`; también lee `~/.agents/skills` nativamente) |
 
 ## MCP
 

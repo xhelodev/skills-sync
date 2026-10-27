@@ -7,6 +7,7 @@
 #   skillsync status               vista rápida (repo, enlaces, último update)
 #   skillsync check                auditoría completa (frontmatter, colisiones, manifest)
 #   skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
+#   skillsync repair [ruta]        rebase trabado por borrado upstream: acepta el borrado (con backup)
 #   skillsync install              PC nueva: link + terceros del manifest + MCP
 #   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
 #   skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
@@ -70,6 +71,7 @@ main() {
     link)    cmd_link ;;
     install) cmd_install ;;
     update)  cmd_update "$@" ;;
+    repair)  cmd_repair "$@" ;;
     sync)    cmd_sync ;;
     manifest) python3 "$LIB/manifest.py" gen "$REPO" ;;
     tools)   cmd_tools "$@" ;;
@@ -635,6 +637,135 @@ cmd_sync() {
   else
     echo "FALLA push (¿credenciales?) — el commit quedó local; reintentá con: skillsync sync"
     exit 1
+  fi
+  cmd_link
+}
+
+# ------------------------------------------------------------------ repair --
+
+# Resuelve un 'git pull --rebase' trabado en conflictos modificar/eliminar
+# (upstream borró archivos que un commit local modificó): acepta el borrado
+# upstream, preserva el commit local en tags de backup y termina el rebase.
+cmd_repair() {
+  local target="${1:-$REPO}"
+  repair_git() { git -C "$target" "$@"; }
+  # rev-parse --git-path puede devolver rutas relativas a la raíz del repo.
+  repair_gpath() {
+    local p; p="$(repair_git rev-parse --git-path "$1")"
+    case "$p" in /*) printf '%s' "$p" ;; *) printf '%s' "$target/$p" ;; esac
+  }
+  repair_in_rebase() {
+    [[ -d $(repair_gpath rebase-merge) || -d $(repair_gpath rebase-apply) ]]
+  }
+  # rutas en conflicto donde upstream borró y el commit local modificó
+  # (durante un rebase, stage 2 ausente = borrado del lado upstream)
+  repair_dels_paths() {
+    repair_git ls-files -u -z | awk -v RS='\0' -v ORS='\0' \
+      '{ split($0,a,"\t"); split(a[1],m," "); p=a[2]; st[p]=st[p] m[3] }
+       END { for (p in st) if (st[p] !~ /2/) print p }'
+  }
+
+  repair_git rev-parse --git-dir >/dev/null 2>&1 || { echo "FALLA '$target' no es un repo git"; exit 1; }
+  if ! repair_in_rebase; then
+    echo "FALLA no hay rebase en progreso en '$target' — nada que reparar"
+    exit 1
+  fi
+
+  # Todos los conflictos deben ser modificar/eliminar (upstream borró, local modificó).
+  local all dels
+  mapfile -d '' all < <(repair_git diff --name-only --diff-filter=U -z)
+  if [[ ${#all[@]} -eq 0 ]]; then
+    echo "FALLA rebase en progreso pero sin conflictos sin resolver — revisá 'git status'"
+    exit 1
+  fi
+  mapfile -d '' dels < <(repair_dels_paths)
+  if [[ ${#dels[@]} -ne ${#all[@]} ]]; then
+    echo "Conflictos que NO son modificar/eliminar (resolvelos a mano):" >&2
+    printf '  %s\n' "${all[@]}" >&2
+    echo "FALLA no se puede reparar automático — nada tocado"
+    exit 1
+  fi
+
+  # Backup del commit en rebase (REBASE_HEAD; fallback ORIG_HEAD / stopped-sha).
+  local backup="" ref stopped
+  for ref in REBASE_HEAD ORIG_HEAD; do
+    if backup=$(repair_git rev-parse --verify -q "$ref^{commit}"); then break; fi
+    backup=""
+  done
+  if [[ -z $backup ]]; then
+    stopped="$(repair_gpath rebase-merge/stopped-sha)"
+    if [[ -f $stopped ]]; then
+      backup=$(repair_git rev-parse --verify -q "$(cat "$stopped")^{commit}" || true)
+    fi
+  fi
+  if [[ -z $backup ]]; then
+    echo "FALLA no pude identificar el commit en rebase — nada tocado"
+    exit 1
+  fi
+  local tag="backup-pre-rebase-$(date +%s)"
+  repair_git tag "$tag" "$backup"
+  echo "OK backup: tag $tag → $(repair_git log -1 --format='%h %s' "$backup")"
+  echo "     recuperar ediciones: git -C '$target' show $tag"
+  local orig
+  orig=$(repair_git rev-parse --verify -q 'ORIG_HEAD^{commit}' || true)
+  if [[ -n $orig && $orig != "$backup" ]]; then
+    repair_git tag "$tag-orig" "$orig"
+    echo "OK backup punta original: $tag-orig → ${orig:0:7}"
+  fi
+
+  # Resolver: aceptar el borrado y avanzar el rebase hasta terminar.
+  export GIT_EDITOR=true
+  local i p d out rc
+  for ((i = 1; i <= 100; i++)); do
+    repair_in_rebase || break
+    mapfile -d '' all < <(repair_git diff --name-only --diff-filter=U -z)
+    if [[ ${#all[@]} -gt 0 ]]; then
+      mapfile -d '' dels < <(repair_dels_paths)
+      if [[ ${#dels[@]} -ne ${#all[@]} ]]; then
+        printf '  %s\n' "${all[@]}" >&2
+        echo "FALLA conflicto que no es modificar/eliminar — resolvelo a mano (backup: $tag)"
+        exit 1
+      fi
+      echo "aceptando borrado upstream de:"
+      printf '  %s\n' "${dels[@]}"
+      repair_git rm -q -f --cached -- "${dels[@]}"
+      for p in "${dels[@]}"; do
+        rm -f -- "$target/$p"
+        d="$(dirname "$target/$p")"        # limpiar directorios que quedaron vacíos
+        while [[ $d != "$target" ]]; do
+          rmdir -- "$d" 2>/dev/null || break
+          d="$(dirname "$d")"
+        done
+      done
+    fi
+    if repair_git diff --cached --quiet; then
+      echo "commit vacío tras aceptar el borrado → rebase --skip"
+      repair_git rebase --skip || true
+    else
+      out=$(repair_git rebase --continue 2>&1) && rc=0 || rc=$?
+      [[ -n $out ]] && echo "$out"
+      if [[ $rc -ne 0 ]] && echo "$out" | grep -qiE 'no changes|nothing to commit|did you forget'; then
+        echo "git pide commit vacío → rebase --skip"
+        repair_git rebase --skip || true
+      fi
+    fi
+  done
+
+  # Verificación final + push + relink.
+  if repair_in_rebase; then
+    echo "FALLA el rebase sigue en progreso — revisá 'git -C $target status' (backup: $tag)"
+    exit 1
+  fi
+  if [[ -n $(repair_git status --porcelain) ]]; then
+    repair_git status --short >&2
+    echo "FALLA árbol de trabajo no limpio (backup: $tag)"
+    exit 1
+  fi
+  echo "OK rebase terminado, árbol limpio"
+  if repair_git push --quiet; then
+    echo "OK push"
+  else
+    echo "AVISO: push falló — el rebase está completo; reintentá con: skillsync sync" >&2
   fi
   cmd_link
 }

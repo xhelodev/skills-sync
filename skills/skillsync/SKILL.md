@@ -1,11 +1,11 @@
 ---
 name: skillsync
-description: Instalar, sincronizar y auditar skills entre agentes (Claude Code, OpenCode, Cursor, Codex, Hermes, pi) y máquinas. Usar cuando el usuario pida instalar, sincronizar, chequear o actualizar skills, o mencione skillsync, skills-shared o third-party.
+description: Instalar, sincronizar y auditar skills entre agentes (Claude Code, OpenCode, Cursor, Codex, Hermes, pi) y máquinas. Usar cuando el usuario pida instalar, sincronizar, chequear o actualizar skills, o mencione skillsync, skills-sync o third-party.
 ---
 
 # skillsync — skills entre agentes y máquinas
 
-Los skills personales viven en `~/skills-shared` (repo privado) y se ven en todos
+Los skills personales viven en `~/skills-sync` (repo privado) y se ven en todos
 los agentes por symlink. Los de terceros los instala `npx skills` y quedan
 registrados en `third-party.yaml`.
 
@@ -24,10 +24,10 @@ registrados en `third-party.yaml`.
 
 ## Reglas
 
-- **Si editaste un skill bajo `~/skills-shared/`** (directamente o por un symlink),
+- **Si editaste un skill bajo `~/skills-sync/`** (directamente o por un symlink),
   al terminar corré `skillsync sync`. No commitees a mano.
 - **Nunca escribas tokens ni secretos** en skills — `sync` lo bloquea, pero no confíes.
-- Skills privados van en `~/skills-shared/skills-local/` (gitignored: se enlazan,
+- Skills privados van en `~/skills-sync/skills-local/` (gitignored: se enlazan,
   jamás se commitean).
 - Terceros jamás se auto-actualizan: `update` muestra el diff antes de aplicar.
 - Herramientas CLI que necesitan los skills: tabla `lib/tools.tsv`;
