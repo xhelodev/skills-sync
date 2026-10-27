@@ -59,8 +59,7 @@ unit() {
   # gen con lock vacío vació el manifest del repo → restaurar y verificar
   assert_rc "manifest restaurado tras gen destructivo" 0 python3 "$SRC/lib/manifest.py" gen "$SRC"
   cmp -s "$T/manifest-real.bak" "$SRC/third-party.yaml" && pass "gen: manifest real intacto tras regenerar" || fail "gen: manifest real cambió"
-  env HOME="$MH" python3 "$SRC/lib/manifest.py" compare "$SRC" >/dev/null 2>&1
-  assert_rc "compare lock vacío vs manifest lleno → exit 1 (falta instalar)" 1 $?
+  assert_rc "compare lock vacío vs manifest lleno → exit 1 (falta instalar)" 1 env HOME="$MH" python3 "$SRC/lib/manifest.py" compare "$SRC"
   mkdir -p "$MH/.agents"
   REPO="$SRC" python3 - "$MH" <<'PY'
 import json, os, sys
