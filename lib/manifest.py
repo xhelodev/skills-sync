@@ -105,13 +105,83 @@ def cmd_gen(repo):
     return 0
 
 
-def cmd_compare(repo):
+def machines_path(repo):
+    return os.path.join(repo, "third-party.machines")
+
+
+def local_path():
+    return os.path.expanduser("~/.config/skillsync/third-party.local")
+
+
+def parse_sidecar(repo):
+    """Selección commiteada: third-party.machines (TSV: clave <TAB> máquinas).
+    Clave = fuente (a/b) o fuente/skill (a/b/c); la de skill gana sobre la de fuente."""
+    src_lv, sk_lv = {}, {}
+    p = machines_path(repo)
+    if not os.path.exists(p):
+        return src_lv, sk_lv
+    for line in open(p):
+        line = line.rstrip("\n")
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        parts = line.split("\t")
+        if len(parts) < 2:
+            continue
+        key, machines = parts[0].strip(), parts[1].strip()
+        seg = key.split("/")
+        if len(seg) >= 3:
+            sk_lv[("/".join(seg[:2]), seg[-1])] = machines
+        else:
+            src_lv[key] = machines
+    return src_lv, sk_lv
+
+
+def parse_local():
+    """Selección local de ESTA máquina: ~/.config/skillsync/third-party.local.
+    Devuelve None si no existe (sin selección local) o el set de fuentes elegidas."""
+    p = local_path()
+    if not os.path.exists(p):
+        return None
+    out = set()
+    for line in open(p):
+        line = line.strip()
+        if line and not line.startswith("#"):
+            out.add(line)
+    return out
+
+
+def read_selection(repo, machine):
+    """Devuelve fn(src, skill) → bool. Precedencia: local > sidecar > todas."""
+    local = parse_local()
+    if local is not None:
+        return lambda src, sk: src in local
+    src_lv, sk_lv = parse_sidecar(repo)
+
+    def m(machines):
+        return any(t.strip() in ("*", machine) for t in machines.split(",") if t.strip())
+
+    def applies(src, sk):
+        if (src, sk) in sk_lv:
+            return m(sk_lv[(src, sk)])
+        if src in src_lv:
+            return m(src_lv[src])
+        return True
+
+    return applies
+
+
+def cmd_compare(repo, machine=None):
     manifest = parse_manifest(repo)
     lock = read_lock()
+    sel = read_selection(repo, machine) if machine else (lambda s, k: True)
     m_pairs = {(src, sk) for src, sks in manifest.items() for sk in sks}
     l_pairs = {(m.get("source", "?"), name) for name, m in lock.items()}
-    missing = sorted(m_pairs - l_pairs)
+    missing = sorted(p for p in m_pairs - l_pairs if sel(*p))
     extra = sorted(l_pairs - m_pairs)
+    # instalados pero excluidos en esta máquina: aviso, no error
+    for src, sk in sorted(l_pairs & m_pairs):
+        if not sel(src, sk):
+            print(f"INFO {sk} ({src}) instalado pero excluido en esta máquina")
     for src, sk in missing:
         print(f"MISSING {sk} ({src}) — instalalo: skillsync install")
     for src, sk in extra:
@@ -122,18 +192,33 @@ def cmd_compare(repo):
     return 1
 
 
-def cmd_list(repo):
+def cmd_list(repo, machine=None):
+    sel = read_selection(repo, machine) if machine else (lambda s, k: True)
     for src, sks in sorted(parse_manifest(repo).items()):
         for sk in sorted(sks):
-            print(f"{src}\t{sk}")
+            if sel(src, sk):
+                print(f"{src}\t{sk}")
+    return 0
+
+
+def cmd_counts(repo, machine=None):
+    sel = read_selection(repo, machine) if machine else (lambda s, k: True)
+    man = parse_manifest(repo)
+    for src in man:
+        n = sum(1 for sk in man[src] if sel(src, sk))
+        if n:
+            print(f"{src}\t{n}")
     return 0
 
 
 def main():
-    if len(sys.argv) < 3 or sys.argv[1] not in ("gen", "compare", "list"):
+    if len(sys.argv) < 3 or sys.argv[1] not in ("gen", "compare", "list", "counts"):
         print(__doc__, file=sys.stderr)
         return 2
-    return {"gen": cmd_gen, "compare": cmd_compare, "list": cmd_list}[sys.argv[1]](sys.argv[2])
+    machine = sys.argv[3] if len(sys.argv) > 3 else None
+    return {"gen": cmd_gen, "compare": cmd_compare, "list": cmd_list,
+            "counts": cmd_counts}[sys.argv[1]](sys.argv[2], machine) if sys.argv[1] != "gen" \
+        else cmd_gen(sys.argv[2])
 
 
 if __name__ == "__main__":

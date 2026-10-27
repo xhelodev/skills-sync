@@ -121,6 +121,7 @@ skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
 skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
+skillsync pick                 elegir qué fuentes de terceros instalar en esta máquina
 skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta, muestra el comando e instala
 skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
 skillsync mcp                  aplicar mcp/servers.json (Claude Code)
@@ -138,6 +139,24 @@ skillsync timer install        timer systemd user cada 30 min (update --pull-onl
   A mano: `skillsync update`.
 
 ## Skills de terceros
+
+**Selección por máquina**: al correr `skillsync install` en una PC nueva con
+terminal, te pregunta fuente por fuente qué querés instalar. La elección queda
+en `~/.config/skillsync/third-party.local` (local, no se commitea) y no vuelve
+a preguntar. Cambiala cuando quieras con `skillsync pick`.
+
+Defaults commiteados por máquina: `third-party.machines` (TSV, mismo espíritu
+que los `.machines` de los personales):
+
+```
+cloudflare/skills	vps,pc     # fuente entera
+obra/superpowers	*
+blader/humanizer/humanizer	vps          # un skill específico (gana sobre la fuente)
+```
+
+Precedencia: `third-party.local` > `third-party.machines` > todas. `skillsync
+manifest` nunca toca estos archivos. Un skill instalado pero excluido en esta
+máquina aparece como `INFO` en `check` (no es error).
 
 - Instalar: `npx -y skills add <fuente> --skill <nombre>` → después
   `skillsync manifest` (registra en third-party.yaml) y `skillsync sync`.

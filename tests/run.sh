@@ -52,6 +52,47 @@ unit() {
     [[ "-----BEGIN RSA PRIVATE KEY" =~ $SECRET_RE ]] && pass "SECRET_RE: detecta private key" || fail "SECRET_RE: private key"
   ) && pass "unit: script fuente cargable" || fail "unit: el source rompió (set -e)"
 
+  # selección por máquina: sidecar + local + compare/counts
+  MF="$T/mani-fix"; mkdir -p "$MF/lib"
+  cp "$SRC/lib/manifest.py" "$MF/lib/manifest.py"
+  printf 'version: 1\nsources:\n  - source: a/b\n    skills:\n      - x\n      - y\n  - source: c/d\n    skills:\n      - z\n' > "$MF/third-party.yaml"
+  printf 'c/d\totra\na/b/y\totra\n' > "$MF/third-party.machines"
+  MHOME="$T/mani-home2"; mkdir -p "$MHOME/.agents"
+  python3 - "$MHOME" <<'PY'
+import json, os, sys
+mh = sys.argv[1]
+json.dump({"version": 3, "skills": {
+    "x": {"source": "a/b"}, "z": {"source": "c/d"}}},
+    open(os.path.join(mh, ".agents", ".skill-lock.json"), "w"))
+PY
+  env HOME="$MHOME" python3 "$MF/lib/manifest.py" counts "$MF" vps > "$T/counts-vps.txt"
+  assert_eq "counts vps: solo a/b con 1 (y excluida)" "a/b	1" "$(cat "$T/counts-vps.txt")"
+  env HOME="$MHOME" python3 "$MF/lib/manifest.py" counts "$MF" otra > "$T/counts-otra.txt"
+  assert_eq "counts otra: a/b 2 + c/d 1" "a/b	2
+c/d	1" "$(cat "$T/counts-otra.txt")"
+  # compare: en vps, z está instalado pero excluido → INFO, no error
+  assert_rc "compare vps: excluido-instalado no es error" 0 env HOME="$MHOME" python3 "$MF/lib/manifest.py" compare "$MF" vps
+  grep -q "INFO z" "$T/cmp-vps.txt" 2>/dev/null || env HOME="$MHOME" python3 "$MF/lib/manifest.py" compare "$MF" vps > "$T/cmp-vps.txt" 2>&1
+  grep -q "INFO z" "$T/cmp-vps.txt" && pass "compare vps: INFO de excluido" || fail "compare vps: sin INFO"
+  # en 'otra': y aplica pero no está instalado → exit 1 MISSING
+  assert_rc "compare otra: y falta → exit 1" 1 env HOME="$MHOME" python3 "$MF/lib/manifest.py" compare "$MF" otra
+  # local gana sobre sidecar: si la máquina solo quiere a/b, z pasa a INFO y y vuelve a aplicar
+  mkdir -p "$MHOME/.config/skillsync"; echo "a/b" > "$MHOME/.config/skillsync/third-party.local"
+  env HOME="$MHOME" python3 "$MF/lib/manifest.py" counts "$MF" vps > "$T/counts-local.txt"
+  assert_eq "counts con local: solo a/b (2 skills)" "a/b	2" "$(cat "$T/counts-local.txt")"
+
+  # pick_sources: escribe la selección local (a=todo el resto)
+  PH="$T/pick-home"; mkdir -p "$PH/.config/skillsync"
+  ( set -euo pipefail
+    source "$T/lib.sh"
+    LIB="$SRC/lib"; REPO="$MF"; MACHINE="vps"
+    printf 's\nn\n' | HOME="$PH" pick_sources
+  ) >/dev/null 2>&1
+  grep -q "^a/b$" "$PH/.config/skillsync/third-party.local" \
+    && pass "pick: a/b seleccionada" || fail "pick: a/b"
+  grep -q "^c/d$" "$PH/.config/skillsync/third-party.local" \
+    && fail "pick: c/d no debía entrar" || pass "pick: c/d quedó fuera"
+
   # manifest.py: gen/compare con HOME aislado (gen sobre COPIA, jamás sobre el repo real)
   MH="$T/mani-home"; mkdir -p "$MH"
   cp "$SRC/third-party.yaml" "$T/manifest-real.bak"

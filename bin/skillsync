@@ -10,6 +10,7 @@
 #   skillsync install              PC nueva: link + terceros del manifest + MCP
 #   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
 #   skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
+#   skillsync pick                 elegir qué fuentes de terceros instalar en esta máquina
 #   skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta y muestra el comando
 #   skillsync adopt <nombre>       capturar un skill que vive en la carpeta de un agente
 #   skillsync mcp                  aplicar mcp/servers.json (Claude Code)
@@ -61,6 +62,7 @@ main() {
     manifest) python3 "$LIB/manifest.py" gen "$REPO" ;;
     tools)   cmd_tools "$@" ;;
     add)     cmd_add "$@" ;;
+    pick)    cmd_pick ;;
     adopt)   cmd_adopt "$@" ;;
     mcp)     python3 "$LIB/mcp.py" "$REPO/mcp/servers.json" ;;
     timer)   cmd_timer "${1:-status}" ;;
@@ -72,7 +74,7 @@ main() {
 # ---------------------------------------------------------------- helpers --
 
 usage() {
-  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 _machine_tag() {
@@ -264,7 +266,7 @@ cmd_check() {
   if [[ ! -f $REPO/third-party.yaml ]]; then
     ERRORS+=("falta third-party.yaml — corré: skillsync manifest")
   else
-    if ! python3 "$LIB/manifest.py" compare "$REPO"; then
+    if ! python3 "$LIB/manifest.py" compare "$REPO" "$MACHINE"; then
       ERRORS+=("third-party.yaml difiere del lock — corré: skillsync manifest (si agregaste skills) o skillsync install (si falta instalar)")
     fi
   fi
@@ -442,13 +444,48 @@ PY
   echo "link: $count enlace(s)"
 }
 
-# ----------------------------------------------------------------- install --
+# ------------------------------------------------- selección local / install --
+
+pick_sources() { # pregunta por fuente y guarda la selección en third-party.local
+  local file="$HOME/.config/skillsync/third-party.local"
+  mkdir -p "$(dirname "$file")"
+  local -a srcs=() nums=()
+  local s n
+  while IFS=$'\t' read -r s n; do srcs+=("$s"); nums+=("$n"); done \
+    < <(python3 "$LIB/manifest.py" counts "$REPO" "$MACHINE")
+  [[ ${#srcs[@]} -eq 0 ]] && { echo "pick: ninguna fuente aplica a esta máquina"; return 1; }
+  echo "── Skills de terceros: ¿cuáles instalás en esta máquina ($MACHINE)? ──"
+  local tmp="$file.tmp"; : > "$tmp"
+  local total=0 i j r
+  for i in "${!srcs[@]}"; do
+    printf '  %s (%s skills)  [S/n/a=todo el resto] ' "${srcs[i]}" "${nums[i]}"
+    read -r r
+    case "${r,,}" in
+      a) for ((j = i; j < ${#srcs[@]}; j++)); do echo "${srcs[j]}" >> "$tmp"; total=$((total + nums[j])); done; break ;;
+      n) : ;;
+      *) echo "${srcs[i]}" >> "$tmp"; total=$((total + nums[i])) ;;
+    esac
+  done
+  { echo "# selección local de terceros (máquina: $MACHINE, generada por skillsync pick)"; grep -v '^$' "$tmp" | sort -u; } > "$file"
+  rm -f "$tmp"
+  echo "selección guardada en $file ($total skills) — cambiála con: skillsync pick"
+}
+
+cmd_pick() {
+  if [[ ! -t 0 ]]; then echo "pick: necesita terminal interactiva"; exit 2; fi
+  pick_sources
+  echo "listo. Aplicá con: skillsync install · commitalo para otras máquinas con: skillsync sync"
+}
 
 cmd_install() {
   cmd_link
   echo "--- terceros (manifest) ---"
   local out missing line sk src
-  out="$(python3 "$LIB/manifest.py" compare "$REPO" 2>&1 || true)"
+  # selección local: si hay TTY y todavía no eligió para esta máquina, preguntar
+  if [[ -t 0 && ! -f $HOME/.config/skillsync/third-party.local ]]; then
+    pick_sources || true
+  fi
+  out="$(python3 "$LIB/manifest.py" compare "$REPO" "$MACHINE" 2>&1 || true)"
   echo "$out"
   missing="$(echo "$out" | grep '^MISSING ' || true)"
   if [[ -n $missing ]] && [[ -t 0 ]]; then
@@ -468,7 +505,10 @@ cmd_install() {
     done
     gate_summary
   elif [[ -n $missing ]]; then
-    echo "FALLA faltan terceros (sin TTY no se instalan):"
+    echo "════════════════════════════════════════════════════════"
+    echo "  ⚠️  TERCEROS SIN INSTALAR (corriste sin terminal interactiva)"
+    echo "     abrí una terminal y corré:  skillsync install"
+    echo "════════════════════════════════════════════════════════"
     echo "$missing"
     exit 2
   fi
