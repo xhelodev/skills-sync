@@ -1,0 +1,31 @@
+# Generado por `skillsync manifest` — no editar a mano: regenerar con ese comando.
+# Cada entrada equivale a: npx -y skills add <source> --skill <skill>
+version: 1
+sources:
+  - source: browser-use/browser-harness
+    skills:
+      - browser-harness
+  - source: cloudflare/skills
+    skills:
+      - agents-sdk
+      - basin
+      - cf-cli
+      - cloudflare
+      - cloudflare-email-service
+      - cloudflare-one
+      - cloudflare-one-migrations
+      - durable-objects
+      - gateway-workers
+      - k2
+      - nextjs-on-cloudflare
+      - sandbox-migrate-to-next
+      - sandbox-next
+      - sandbox-stable
+      - turnstile-spin
+      - web-perf
+      - workers-best-practices
+      - workers-profiling
+      - wrangler
+  - source: vercel-labs/skills
+    skills:
+      - find-skills

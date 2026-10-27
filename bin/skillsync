@@ -1,0 +1,627 @@
+#!/usr/bin/env bash
+# skillsync — instala, sincroniza y mantiene skills personales y de terceros
+# entre todos los agentes (claude, opencode, cursor, codex, hermes, pi) y máquinas.
+#
+# Uso diario:
+#   skillsync sync                 mis ediciones: check + commit + push + link
+#   skillsync status               vista rápida (repo, enlaces, último update)
+#   skillsync check                auditoría completa (frontmatter, colisiones, manifest)
+#   skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
+#   skillsync install              PC nueva: link + terceros del manifest + MCP
+#   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
+#   skillsync adopt <nombre>       capturar un skill que vive en la carpeta de un agente
+#   skillsync mcp                  aplicar mcp/servers.json (Claude Code)
+#   skillsync timer install        timer systemd user cada 30 min (update --pull-only)
+#
+# Diseño:
+# - Una sola copia física por skill; los agentes lo ven por symlink (o settings, pi).
+# - Terceros (~/.agents/skills) los enlaza el CLI `npx skills`; acá solo se
+#   manifiestan (third-party.yaml) y se auditan. Nunca se auto-actualizan en silencio.
+# - Todo el cuerpo vive en main() + exit final: un pull que reescriba este archivo
+#   mientras corre no puede romper la ejecución en curso.
+set -euo pipefail
+shopt -s nullglob
+
+main() {
+  local SELF REPO MACHINE LIB STATE_DIR BIN_LINK
+  SELF="$(readlink -f "$0")"
+  REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
+  LIB="$REPO/lib"
+  MACHINE="$(_machine_tag)"
+  STATE_DIR="$HOME/.local/state/skillsync"
+
+  # regex de secretos (se aplica solo a skills/ y mcp/, jamás a bin/ que la define)
+  local SECRET_RE='ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY'
+
+  local DRY=0
+  local cmd="${1:-help}"
+  [[ $# -gt 0 ]] && shift
+
+  # flags globales
+  local args=()
+  for a in "$@"; do
+    case "$a" in
+      --dry-run) DRY=1 ;;
+      *) args+=("$a") ;;
+    esac
+  done
+  set -- "${args[@]}"
+
+  case "$cmd" in
+    status)  cmd_status ;;
+    check)   cmd_check ;;
+    link)    cmd_link ;;
+    install) cmd_install ;;
+    update)  cmd_update "$@" ;;
+    sync)    cmd_sync ;;
+    manifest) python3 "$LIB/manifest.py" gen "$REPO" ;;
+    adopt)   cmd_adopt "$@" ;;
+    mcp)     python3 "$LIB/mcp.py" "$REPO/mcp/servers.json" ;;
+    timer)   cmd_timer "${1:-status}" ;;
+    help|-h|--help|*) usage ;;
+  esac
+  exit 0
+}
+
+# ---------------------------------------------------------------- helpers --
+
+usage() {
+  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+_machine_tag() {
+  if [[ -n "${SKILLSYNC_MACHINE:-}" ]]; then echo "$SKILLSYNC_MACHINE"; return; fi
+  local f="$HOME/.config/skillsync/machine"
+  if [[ -f $f ]] && [[ -n $(<"$f") ]]; then tr -d ' \n' < "$f"; return; fi
+  hostname -s
+}
+
+# tabla de agentes: AGENT_* paralelos
+declare -a AGENT_NAMES AGENT_BASES AGENT_DIRS AGENT_METHODS
+load_agents() {
+  AGENT_NAMES=(); AGENT_BASES=(); AGENT_DIRS=(); AGENT_METHODS=()
+  local tsv="$REPO/lib/agents.tsv"
+  if [[ ! -f $tsv ]]; then echo "FALLA falta $tsv" >&2; exit 2; fi
+  local name base dir method
+  while IFS=$'\t' read -r name base dir method; do
+    [[ -z ${name// } || $name == \#* ]] && continue
+    AGENT_NAMES+=("$name")
+    AGENT_BASES+=("${base/#\~/$HOME}")
+    AGENT_DIRS+=("${dir/#\~/$HOME}")
+    AGENT_METHODS+=("${method:-symlink}")
+  done < "$tsv"
+}
+
+agent_index() { # nombre → índice en AGENT_* o return 1
+  local i
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_NAMES[i]} == "$1" ]] && { echo "$i"; return 0; }
+  done
+  return 1
+}
+
+agent_detected() { [[ -d ${AGENT_BASES[$1]} ]]; }   # por índice
+
+gitc() { git -C "$REPO" "$@"; }
+
+write_state() { # resultado detalle
+  mkdir -p "$STATE_DIR"
+  printf '%s\n%s\n%s\n' "$(date -Is)" "$1" "$2" > "$STATE_DIR/last-update.txt"
+}
+
+fm_field() { # archivo campo → valor del frontmatter (primera coincidencia)
+  awk -v f="$2" '
+    NR == 1 && $0 !~ /^---[[:space:]]*$/ { exit }
+    NR > 1 && /^---[[:space:]]*$/ { exit }
+    NR > 1 && index($0, f ":") == 1 {
+      sub(/^[^:]*:[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit
+    }' "$1"
+}
+
+prune_backups() { # bak_dir nombre — retiene los últimos 5
+  local old
+  old="$(ls -1t "$1/$2"-* 2>/dev/null | tail -n +6 || true)"
+  [[ -z $old ]] && return 0
+  while IFS= read -r f; do rm -rf "$f"; done <<< "$old"
+}
+
+# ------------------------------------------------------------------ status --
+
+cmd_status() {
+  load_agents
+  echo "skillsync · máquina='$MACHINE' · repo='$REPO'"
+
+  # repo
+  local branch up dirty ahead behind
+  branch="$(gitc rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+  up="$(gitc rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  dirty="$(gitc status --porcelain)"
+  if [[ -n $up ]]; then
+    ahead="$(gitc rev-list --count '@{u}..HEAD' 2>/dev/null || echo '?')"
+    behind="$(gitc rev-list --count 'HEAD..@{u}' 2>/dev/null || echo '?')"
+  else
+    ahead='?'; behind='?'
+  fi
+  echo "repo: rama=$branch ${up:+(vs $up)} $([[ -n $dirty ]] && echo '· SUCIO' || echo '· limpio') · ahead=$ahead behind=$behind"
+  gitc log -1 --format='último commit: %h %s (%cr)' 2>/dev/null || true
+
+  # agentes y enlaces
+  local i name dir links broken n t
+  for i in "${!AGENT_NAMES[@]}"; do
+    name="${AGENT_NAMES[i]}"; dir="${AGENT_DIRS[i]}"
+    if ! agent_detected "$i"; then echo "agente  $name: no instalado"; continue; fi
+    if [[ ${AGENT_METHODS[i]} == settings ]]; then
+      echo "agente  $name: settings $( [[ -f $dir ]] && grep -q "$REPO/skills" "$dir" && echo 'OK' || echo 'sin configurar' ) ($dir)"
+      continue
+    fi
+    links=0; broken=0
+    for l in "$dir"/*; do
+      [[ -L $l ]] || continue
+      t="$(readlink "$l")"
+      [[ $t == "$REPO"/skills/* || $t == "$REPO"/skills-local/* ]] || continue
+      links=$((links+1))
+      [[ ! -e $l ]] && broken=$((broken+1))
+    done
+    echo "agente  $name: $links enlaces del repo$([[ $broken -gt 0 ]] && echo " · $broken ROTOS" || echo '')"
+  done
+
+  # terceros
+  local lock_n man_n
+  lock_n="$(python3 -c "import json,os;p=os.path.expanduser('~/.agents/.skill-lock.json');print(len(json.load(open(p))['skills']) if os.path.exists(p) else 0)" 2>/dev/null || echo 0)"
+  man_n="$([[ -f $REPO/third-party.yaml ]] && grep -cE '^[[:space:]]+- [a-z0-9][a-z0-9-]*[[:space:]]*$' "$REPO/third-party.yaml" || echo 0)"
+  echo "terceros: lock=$lock_n manifest=$man_n$([[ $lock_n != "$man_n" ]] && echo ' · DIFIEREN (skillsync check)')"
+
+  # último update del timer
+  if [[ -f $STATE_DIR/last-update.txt ]]; then
+    echo "último update: $(sed -n 2p "$STATE_DIR/last-update.txt") · $(sed -n 3p "$STATE_DIR/last-update.txt") · $(sed -n 1p "$STATE_DIR/last-update.txt")"
+  else
+    echo "último update: (sin registros)"
+  fi
+}
+
+# ------------------------------------------------------------------- check --
+
+cmd_check() {
+  load_agents
+  local ERRORS=() WARNS=()
+
+  # 1. skills propios (skills/ y skills-local/)
+  local src d name nm desc all_names=()
+  for src in skills skills-local; do
+    for d in "$REPO/$src"/*/; do
+      [[ -d $d ]] || continue
+      name="$(basename "$d")"
+      if [[ ! -f $d/SKILL.md ]]; then
+        ERRORS+=("$src/$name: falta SKILL.md"); continue
+      fi
+      nm="$(fm_field "$d/SKILL.md" name)"
+      desc="$(fm_field "$d/SKILL.md" description)"
+      [[ -z $nm ]] && ERRORS+=("$src/$name: frontmatter sin name")
+      [[ "$nm" != "$name" ]] && ERRORS+=("$src/$name: name='$nm' ≠ directorio")
+      [[ -n $nm && ! $nm =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] && ERRORS+=("$src/$name: name inválido ('$nm')")
+      [[ -z $desc ]] && ERRORS+=("$src/$name: frontmatter sin description")
+      [[ ${#desc} -gt 1024 ]] && ERRORS+=("$src/$name: description > 1024 chars")
+      [[ -n $desc && ${#desc} -lt 40 ]] && WARNS+=("$src/$name: description vaga (<40 chars) — los agentes no van a saber cuándo usarlo")
+      if [[ -f $d/.machines && -z $(<"$d/.machines") ]]; then
+        ERRORS+=("$src/$name: .machines vacío (quitá el archivo o poné una etiqueta)")
+      fi
+      local t tok ok
+      if [[ -f $d/.targets ]]; then
+        for tok in $(tr ',' ' ' < "$d/.targets"); do
+          agent_index "$tok" >/dev/null || ERRORS+=("$src/$name: .targets con agente desconocido '$tok'")
+        done
+      fi
+      all_names+=("$name")
+    done
+  done
+
+  # 2. colisiones entre fuentes (personales / locales / terceros del CLI)
+  local third
+  third="$(python3 -c "import json,os;p=os.path.expanduser('~/.agents/.skill-lock.json');print(' '.join(sorted(json.load(open(p))['skills'])))" 2>/dev/null || true)"
+  local a b dup
+  for a in ${all_names[*]}; do
+    for b in $third; do
+      [[ "$a" == "$b" ]] && ERRORS+=("colisión de nombre '$a' entre skills/ y terceros del CLI — renombrá o desinstalá uno (precedencia esperada: personal > local > tercero)")
+    done
+  done
+  dup="$(printf '%s\n' "${all_names[@]}" 2>/dev/null | sort | uniq -d || true)"
+  [[ -n $dup ]] && ERRORS+=("colisión de nombre entre skills/ y skills-local/: $dup")
+
+  # 3. manifest vs lock
+  if [[ ! -f $REPO/third-party.yaml ]]; then
+    ERRORS+=("falta third-party.yaml — corré: skillsync manifest")
+  else
+    if ! python3 "$LIB/manifest.py" compare "$REPO"; then
+      ERRORS+=("third-party.yaml difiere del lock — corré: skillsync manifest (si agregaste skills) o skillsync install (si falta instalar)")
+    fi
+  fi
+
+  # 4. enlaces rotos en agentes
+  local i dir t
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+    agent_detected "$i" || continue
+    dir="${AGENT_DIRS[i]}"
+    for l in "$dir"/*; do
+      [[ -L $l ]] || continue
+      t="$(readlink "$l")"
+      [[ $t == "$REPO"/skills/* || $t == "$REPO"/skills-local/* ]] || continue
+      [[ ! -e $l ]] && ERRORS+=("enlace roto en ${AGENT_NAMES[i]}: $l → $t (skillsync link)")
+    done
+  done
+
+  # 5. skills sin gestionar en agentes (real dir con SKILL.md, no nuestro, no excluido)
+  local excl='\.system|synced'
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+    agent_detected "$i" || continue
+    [[ ${AGENT_NAMES[i]} == hermes ]] && continue  # hermes gestiona categorías propias
+    dir="${AGENT_DIRS[i]}"
+    for d in "$dir"/*; do
+      [[ -d $d && -f $d/SKILL.md ]] || continue
+      [[ -L $d ]] && continue
+      name="$(basename "$d")"
+      [[ $name =~ ^($excl)$ ]] && continue
+      [[ -d $REPO/skills/$name || -d $REPO/skills-local/$name ]] && continue
+      WARNS+=("sin gestionar en ${AGENT_NAMES[i]}: $name — adoptalo (skillsync adopt $name --from ${AGENT_NAMES[i]}) o eliminalo")
+    done
+  done
+
+  # salida
+  local w
+  for w in "${WARNS[@]}"; do echo "WARN  $w"; done
+  if [[ ${#ERRORS[@]} -gt 0 ]]; then
+    for w in "${ERRORS[@]}"; do echo "FALLA $w"; done
+    echo "check: ${#ERRORS[@]} error(es), ${#WARNS[@]} aviso(s)"
+    exit 1
+  fi
+  echo "check: OK (${#WARNS[@]} aviso(s))"
+}
+
+# -------------------------------------------------------------------- link --
+
+cmd_link() {
+  load_agents
+  echo "link · máquina='$MACHINE' · repo='$REPO'"
+
+  # autoinstalación del comando
+  if [[ -d $HOME/.local/bin ]] && [[ ! -e $HOME/.local/bin/skillsync || -L $HOME/.local/bin/skillsync ]]; then
+    [[ $DRY == 1 ]] && echo "  (dry) ln -s $SELF $HOME/.local/bin/skillsync" || ln -sfn "$SELF" "$HOME/.local/bin/skillsync"
+  fi
+
+  # agentes symlink: asegurar dir de skills
+  local i
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+    agent_detected "$i" || continue
+    [[ -d ${AGENT_DIRS[i]} ]] || { echo "· ${AGENT_NAMES[i]}: creo ${AGENT_DIRS[i]}"; [[ $DRY == 1 ]] && echo "  (dry) mkdir" || mkdir -p "${AGENT_DIRS[i]}"; }
+  done
+
+  declare -A LINKED   # "agente/nombre"=1
+  local src d name machines wanted hit idx target count=0
+
+  for src in skills skills-local; do
+    for d in "$REPO/$src"/*/; do
+      [[ -d $d ]] || continue
+      name="$(basename "$d")"
+      if [[ ! -f $d/SKILL.md ]]; then
+        echo "· $name → omitido (sin SKILL.md — ver skillsync check)"
+        continue
+      fi
+      if [[ -f $d/.machines ]]; then
+        machines="$(tr -d ' \n' < "$d/.machines")"
+      else machines='*'; fi
+      hit=0
+      local tag
+      if [[ $machines == *'*'* ]]; then
+        hit=1
+      else
+        local -a tags
+        IFS=',' read -ra tags <<< "$machines"
+        for tag in "${tags[@]}"; do
+          tag="${tag//[[:space:]]/}"
+          [[ "$tag" == "$MACHINE" ]] && hit=1
+        done
+      fi
+      if [[ $hit -ne 1 ]]; then
+        echo "· $name → omitido (solo para: $machines)"
+        continue
+      fi
+      if [[ -f $d/.targets ]]; then wanted="$(tr -d ' \n' < "$d/.targets")"; else wanted='all'; fi
+
+      for i in "${!AGENT_NAMES[@]}"; do
+        [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+        agent_detected "$i" || continue
+        [[ $wanted == all ]] || [[ ",$wanted," == *",${AGENT_NAMES[i]},"* ]] || continue
+        target="${AGENT_DIRS[i]}/$name"
+        LINKED["${AGENT_NAMES[i]}/$name"]=1
+        if [[ -L $target ]]; then
+          [[ $DRY == 1 ]] || { rm -f "$target"; ln -s "$d" "$target"; }
+        elif [[ -e $target ]]; then
+          local bak_dir bak
+          bak_dir="$HOME/.skillsync/backups/${AGENT_NAMES[i]}"
+          bak="$bak_dir/$name-$(date +%Y%m%d-%H%M%S)"
+          echo "  · backup: ${AGENT_NAMES[i]}/$name → $bak"
+          [[ $DRY == 1 ]] || { mkdir -p "$bak_dir"; mv "$target" "$bak"; prune_backups "$bak_dir" "$name"; ln -s "$d" "$target"; }
+        else
+          [[ $DRY == 1 ]] || ln -s "$d" "$target"
+        fi
+        echo "OK ${AGENT_NAMES[i]}/$name"
+        count=$((count+1))
+      done
+    done
+  done
+
+  # pi (método settings): sumar el dir de skills a su settings.json
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_METHODS[i]} == settings ]] || continue
+    agent_detected "$i" || continue
+    [[ $DRY == 1 ]] && { echo "  (dry) settings ${AGENT_DIRS[i]} ← $REPO/skills"; continue; }
+    REPO="$REPO" python3 - "${AGENT_DIRS[i]}" <<'PY'
+import json, os, sys
+cfg, repo = sys.argv[1], os.environ["REPO"]
+data = {}
+if os.path.exists(cfg):
+    try:
+        data = json.load(open(cfg))
+    except ValueError as e:
+        print(f"WARN {cfg} inválido ({e}) — no tocado"); sys.exit(0)
+skills = data.get("skills", [])
+for d in (os.path.join(repo, "skills"), os.path.join(repo, "skills-local")):
+    if os.path.isdir(d) and d not in skills:
+        skills.append(d)
+data["skills"] = skills
+os.makedirs(os.path.dirname(cfg), exist_ok=True)
+with open(cfg, "w") as f:
+    json.dump(data, f, indent=2, ensure_ascii=False)
+    f.write("\n")
+print(f"OK settings pi: {cfg} (skills: {len(skills)} entradas)")
+PY
+  done
+
+  # limpieza de huérfanos: solo symlinks que apuntan a este repo
+  local l t orphan
+  for i in "${!AGENT_NAMES[@]}"; do
+    [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+    agent_detected "$i" || continue
+    for l in "${AGENT_DIRS[i]}"/*; do
+      [[ -L $l ]] || continue
+      t="$(readlink "$l")"
+      [[ $t == "$REPO"/skills/* || $t == "$REPO"/skills-local/* ]] || continue
+      name="$(basename "$l")"
+      [[ -n ${LINKED["${AGENT_NAMES[i]}/$name"]+x} ]] && continue
+      echo "· huérfano eliminado: ${AGENT_NAMES[i]}/$name"
+      [[ $DRY == 1 ]] || rm -f "$l"
+      count=$((count-1))
+    done
+  done
+
+  echo "link: $count enlace(s)"
+}
+
+# ----------------------------------------------------------------- install --
+
+cmd_install() {
+  cmd_link
+  echo "--- terceros (manifest) ---"
+  local out missing line sk src
+  out="$(python3 "$LIB/manifest.py" compare "$REPO" 2>&1 || true)"
+  echo "$out"
+  missing="$(echo "$out" | grep '^MISSING ' || true)"
+  if [[ -n $missing ]] && [[ -t 0 ]]; then
+    while IFS= read -r line; do
+      sk="${line#MISSING }"; sk="${sk%%[[:space:]](*}"; src="$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')"
+      echo ">>> npx -y skills add $src --skill $sk"
+      npx -y skills add "$src" --skill "$sk" || echo "FALLA add $sk — continuar con el resto"
+    done <<< "$missing"
+  elif [[ -n $missing ]]; then
+    echo "FALLA faltan terceros (sin TTY no se instalan): $missing"
+    exit 2
+  fi
+  echo "--- MCP ---"
+  python3 "$LIB/mcp.py" "$REPO/mcp/servers.json"
+}
+
+# ------------------------------------------------------------------ update --
+
+cmd_update() {
+  local pull_only=0
+  local a
+  for a in "$@"; do [[ "$a" == --pull-only ]] && pull_only=1; done
+  load_agents
+
+  local up dirty ahead behind
+  up="$(gitc rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>/dev/null || true)"
+  if [[ -z $up ]]; then
+    echo "FALLA el repo no tiene upstream configurado"; write_state fallo "sin upstream"; exit 3
+  fi
+  gitc fetch --quiet || { echo "FALLA fetch (¿sin red?)"; write_state fallo "fetch"; [[ $pull_only == 1 ]] && exit 3 || exit 1; }
+  dirty="$(gitc status --porcelain)"
+  ahead="$(gitc rev-list --count '@{u}..HEAD')"
+  behind="$(gitc rev-list --count 'HEAD..@{u}')"
+
+  if [[ $pull_only == 1 ]]; then
+    if [[ -n $dirty ]]; then
+      echo "skip árbol sucio (ediciones sin commitear) — resolver con: skillsync sync"
+      write_state sucio "cambios locales pendientes"; exit 3
+    fi
+    if [[ $ahead -gt 0 && $behind -gt 0 ]]; then
+      echo "skip historias divergidas (local $ahead / remoto $behind) — resolver a mano"
+      write_state divergido "ahead=$ahead behind=$behind"; exit 3
+    fi
+    if [[ $behind -gt 0 ]]; then
+      gitc merge --ff-only '@{u}' >/dev/null \
+        && { echo "OK actualizado ($behind commit(s))"; write_state actualizado "$behind commits"; cmd_link; } \
+        || { echo "FALLA ff-only"; write_state fallo "merge"; exit 3; }
+    else
+      [[ $ahead -gt 0 ]] && { echo "skip local adelantado $ahead commit(s) — falta push (skillsync sync)"; write_state adelantado "$ahead commits"; } \
+        || { echo "OK al día"; write_state ok "nada que traer"; }
+    fi
+    exit 0
+  fi
+
+  # interactivo
+  [[ -n $dirty ]] && echo "WARN árbol sucio: tus ediciones no commiteadas quedan afuera — usá skillsync sync"
+  if [[ $behind -gt 0 ]]; then
+    echo "--- llegan $behind commit(s) ---"
+    gitc log --oneline 'HEAD..@{u}' | head -20
+    if gitc merge --ff-only '@{u}' >/dev/null; then
+      echo "OK actualizado"; cmd_link
+    else
+      echo "FALLA no se pudo aplicar fast-forward"; exit 3
+    fi
+  else
+    echo "OK personales al día$([[ $ahead -gt 0 ]] && echo " (local adelantado $ahead — skillsync sync)")"
+  fi
+
+  local lock_n
+  lock_n="$(python3 -c "import json,os;p=os.path.expanduser('~/.agents/.skill-lock.json');print(len(json.load(open(p))['skills']) if os.path.exists(p) else 0)" 2>/dev/null || echo 0)"
+  if [[ $lock_n -gt 0 ]] && [[ -t 0 ]]; then
+    printf '¿Actualizar skills de terceros ahora? (muestra cambios antes de aplicar) [s/N] '
+    local r; read -r r
+    if [[ $r == s || $r == S ]]; then
+      npx -y skills update
+      python3 "$LIB/manifest.py" gen "$REPO"
+    fi
+  fi
+}
+
+# -------------------------------------------------------------------- sync --
+
+cmd_sync() {
+  cmd_check
+  gitc add -A
+  if gitc diff --cached --quiet; then
+    echo "sync: nada que commitear"
+    gitc merge --ff-only '@{u}' >/dev/null 2>&1 || true
+    cmd_link
+    exit 0
+  fi
+
+  # escaneo de secretos: solo contenido de skills/ y mcp/
+  local files f m hits=""
+  files="$(gitc diff --cached --name-only | grep -E '^(skills/|mcp/)' || true)"
+  while IFS= read -r f; do
+    [[ -f $REPO/$f ]] || continue
+    m="$(grep -nE "$SECRET_RE" "$REPO/$f" || true)"
+    [[ -n $m ]] && hits+="  $f → $m"$'\n'
+  done <<< "$files"
+  if [[ -n $hits ]]; then
+    gitc reset -q
+    echo "FALLA posible(s) secreto(s) en el commit — NADA commiteado:"
+    echo "$hits"
+    echo "si es un falso positivo, revisalo a mano y commiteá vos."
+    exit 1
+  fi
+
+  local names msg
+  names="$(gitc diff --cached --name-only | grep '^skills/' | cut -d/ -f2 | sort -u | paste -sd' ' - || true)"
+  [[ -z $names ]] && names="cambios varios"
+  msg="sync($MACHINE): ${names:0:60}"
+  gitc commit -q -m "$msg"
+  echo "OK commit: $msg"
+  if gitc push --quiet; then
+    echo "OK push"
+  else
+    echo "FALLA push (¿credenciales?) — el commit quedó local; reintentá con: skillsync sync"
+    exit 1
+  fi
+  cmd_link
+}
+
+# ------------------------------------------------------------------- adopt --
+
+cmd_adopt() {
+  load_agents
+  local name="${1:-}" from="${3:-}"
+  [[ -z $name ]] && { echo "uso: skillsync adopt <nombre> [--from agente]  (o una ruta)"; exit 2; }
+  local src="$name"
+  if [[ ! -d $src ]]; then
+    local i found="" dir
+    if [[ -n $from ]]; then
+      idx="$(agent_index "$from")" || { echo "FALLA agente desconocido: $from"; exit 2; }
+      src="${AGENT_DIRS[idx]}/$name"
+    else
+      for i in "${!AGENT_NAMES[@]}"; do
+        [[ ${AGENT_METHODS[i]} == symlink ]] || continue
+        dir="${AGENT_DIRS[i]}/$name"
+        [[ -d $dir && ! -L $dir && -f $dir/SKILL.md ]] && found+="$i "
+      done
+      if [[ -z $found ]]; then echo "FALLA no encontré '$name' como skill real en ningún agente"; exit 2; fi
+      if [[ $(wc -w <<< "$found") -gt 1 ]]; then
+        echo "FALLA '$name' existe en varios agentes; especificá --from:" 
+        for i in $found; do echo "  --from ${AGENT_NAMES[i]}"; done
+        exit 2
+      fi
+      src="${AGENT_DIRS[found]}/$name"
+    fi
+  fi
+  src="$(readlink -f "$src")"
+  [[ -f $src/SKILL.md ]] || { echo "FALLA $src no tiene SKILL.md"; exit 2; }
+  if [[ $src == "$HOME"/.agents/skills/* ]]; then
+    echo "es un skill de TERCEROS del CLI — no se adopta: registralo con: skillsync manifest"
+    exit 2
+  fi
+  name="$(basename "$src")"
+  [[ -d $REPO/skills/$name ]] && { echo "FALLA ya existe skills/$name en el repo"; exit 2; }
+  local dest="$REPO/skills/$name"
+  echo "· moviendo $src → $dest"
+  mv "$src" "$dest"
+  echo "$MACHINE" > "$dest/.machines"
+  ln -s "$dest" "$src"
+  echo "OK adoptado: $name (.machines=$MACHINE — amplialo a '*' si aplica en todas las máquinas)"
+  cmd_link
+}
+
+# ------------------------------------------------------------------- timer --
+
+cmd_timer() {
+  local action="$1" udir="$HOME/.config/systemd/user"
+  case "$action" in
+    install)
+      mkdir -p "$udir"
+      cat > "$udir/skillsync.service" <<EOF
+[Unit]
+Description=skillsync — update --pull-only (traer skills del remoto)
+
+[Service]
+Type=oneshot
+ExecStart=$REPO/bin/skillsync update --pull-only
+EOF
+      cat > "$udir/skillsync.timer" <<EOF
+[Unit]
+Description=skillsync — cada 30 minutos
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=30min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+      systemctl --user daemon-reload
+      systemctl --user enable --now skillsync.timer
+      loginctl enable-linger 2>/dev/null \
+        && echo "OK linger activado (corre sin sesión abierta)" \
+        || echo "WARN no pude activar linger (sudo loginctl enable-linger $USER) — el timer solo corre con sesión activa"
+      echo "OK timer instalado: systemctl --user list-timers | grep skillsync"
+      ;;
+    uninstall)
+      systemctl --user disable --now skillsync.timer 2>/dev/null || true
+      rm -f "$udir/skillsync.timer" "$udir/skillsync.service"
+      systemctl --user daemon-reload
+      echo "OK timer desinstalado"
+      ;;
+    status)
+      systemctl --user list-timers --no-pager 2>/dev/null | grep -E 'skillsync|NEXT' || echo "timer no instalado"
+      if [[ -f $STATE_DIR/last-update.txt ]]; then
+        echo "último: $(sed -n 2p "$STATE_DIR/last-update.txt") · $(sed -n 3p "$STATE_DIR/last-update.txt") · $(sed -n 1p "$STATE_DIR/last-update.txt")"
+        journalctl --user -u skillsync.service -n 10 --no-pager 2>/dev/null | tail -10 || true
+      fi
+      ;;
+  esac
+}
+
+main "$@"
+exit

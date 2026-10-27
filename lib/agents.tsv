@@ -1,0 +1,13 @@
+# skillsync — registro de agentes.
+# Campos (separados por TAB): nombre <TAB> dir-base <TAB> dir-skills <TAB> método
+#   dir-base : el agente cuenta como "instalado" si este directorio existe
+#   dir-skills: carpeta de skills del agente (se crea si falta) — o archivo de settings si método=settings
+#   método   : symlink (enlazar cada skill) | settings (agregar el dir de skills al settings del agente)
+# Agregar un agente nuevo = una línea acá, sin tocar el script.
+# Terceros (~/.agents/skills) los enlaza el CLI `npx skills`; skillsync nunca los toca.
+claude	~/.claude	~/.claude/skills	symlink
+opencode	~/.config/opencode	~/.config/opencode/skills	symlink
+cursor	~/.cursor	~/.cursor/skills	symlink
+codex	~/.codex	~/.codex/skills	symlink
+hermes	~/.hermes	~/.hermes/skills	symlink
+pi	~/.pi	~/.pi/settings.json	settings
