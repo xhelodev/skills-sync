@@ -36,6 +36,7 @@ skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
 skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
+skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
 skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta, muestra el comando e instala
 skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
 skillsync mcp                  aplicar mcp/servers.json (Claude Code)
@@ -96,6 +97,12 @@ Forzar: `SKILLSYNC_MACHINE=vps skillsync …`. Las etiquetas actuales: `vps`,
 - `sync` bloquea el commit si detecta patrones de secretos (`ghp_`, `sk-`,
   `AKIA`, `BEGIN PRIVATE KEY`…) en `skills/` o `mcp/`. Es una red de seguridad,
   no una garantía — si está `gitleaks`, sumalo a mano.
+- **Gate de skill-lint**: todo tercero pasa por `npx skill-lint <repo>` antes de
+  instalarse (`skillsync add` / `skillsync install`). SEGURO instala; AVISO pide
+  confirmación; TÓXICO se bloquea en rojo y queda para revisión manual — si la
+  revisión lo aprueba, se instala a mano con `npx -y skills add <repo> -g -y`
+  y queda registrado con `skillsync manifest`. El scanner es estricto y escanea
+  el repo entero (tests incluidos): los bloqueados hay que revisarlos uno por uno.
 - Bootstrap con PAT fine-grained de solo lectura que nunca se persiste.
 
 ## Timer (VPS)

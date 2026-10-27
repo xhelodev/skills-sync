@@ -19,6 +19,7 @@ registrados en `third-party.yaml`.
 | "instalá todo en esta máquina" | `skillsync install` |
 | "registrá un tercero nuevo" | `npx -y skills add <fuente> --skill <n>` → `skillsync manifest` → `skillsync sync` |
 | "falta una herramienta / instalala" | `skillsync tools` (muestra el comando, pide confirmación) |
+| "agregá este skill de terceros" | `skillsync add <owner/repo>` (escanea con skill-lint antes; TÓXICO no se instala) |
 | "capturá este skill suelto" | `skillsync adopt <nombre> --from <agente>` |
 
 ## Reglas

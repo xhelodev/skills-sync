@@ -9,6 +9,7 @@
 #   skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
 #   skillsync install              PC nueva: link + terceros del manifest + MCP
 #   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
+#   skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
 #   skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta y muestra el comando
 #   skillsync adopt <nombre>       capturar un skill que vive en la carpeta de un agente
 #   skillsync mcp                  aplicar mcp/servers.json (Claude Code)
@@ -57,6 +58,7 @@ main() {
     sync)    cmd_sync ;;
     manifest) python3 "$LIB/manifest.py" gen "$REPO" ;;
     tools)   cmd_tools "$@" ;;
+    add)     cmd_add "$@" ;;
     adopt)   cmd_adopt "$@" ;;
     mcp)     python3 "$LIB/mcp.py" "$REPO/mcp/servers.json" ;;
     timer)   cmd_timer "${1:-status}" ;;
@@ -68,7 +70,7 @@ main() {
 # ---------------------------------------------------------------- helpers --
 
 usage() {
-  sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 _machine_tag() {
@@ -437,13 +439,24 @@ cmd_install() {
   echo "$out"
   missing="$(echo "$out" | grep '^MISSING ' || true)"
   if [[ -n $missing ]] && [[ -t 0 ]]; then
+    local -a srcs=()
     while IFS= read -r line; do
-      sk="${line#MISSING }"; sk="${sk%%[[:space:]](*}"; src="$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')"
-      echo ">>> npx -y skills add $src --skill $sk"
-      npx -y skills add "$src" --skill "$sk" || echo "FALLA add $sk — continuar con el resto"
+      src="$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')"
+      [[ " ${srcs[*]:-} " == *" $src "* ]] || srcs+=("$src")
     done <<< "$missing"
+    for src in "${srcs[@]}"; do
+      scan_gate "$src" || continue
+      while IFS= read -r line; do
+        [[ "$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')" != "$src" ]] && continue
+        sk="${line#MISSING }"; sk="${sk%%[[:space:]](*}"
+        echo ">>> npx -y skills add $src --skill $sk -g -y"
+        npx -y skills add "$src" --skill "$sk" -g -y || echo "FALLA add $sk — continuar con el resto"
+      done <<< "$missing"
+    done
+    gate_summary
   elif [[ -n $missing ]]; then
-    echo "FALLA faltan terceros (sin TTY no se instalan): $missing"
+    echo "FALLA faltan terceros (sin TTY no se instalan):"
+    echo "$missing"
     exit 2
   fi
   echo "--- MCP ---"
@@ -619,6 +632,92 @@ cmd_tools() {
       fi
     fi
   done
+}
+
+# -------------------------------------------------------------------- gate --
+
+C_RED=$'\e[1;31m'; C_YEL=$'\e[1;33m'; C_GRN=$'\e[32m'; C_OFF=$'\e[0m'
+GATE_OK=(); GATE_WARN_OK=(); GATE_BLOCKED=(); GATE_ERR=()
+
+run_lint() { timeout 180 npx -y skill-lint "$@"; }
+
+scan_gate() { # <owner/repo|url> → 0=instalar, 1=no instalar (fail-closed)
+  local src="$1" url="$1" out rc
+  [[ $url == */* && $url != http* ]] && url="https://github.com/$url"
+  [[ $DRY == 1 ]] && { echo "(dry) skill-lint $url"; return 0; }
+  echo "🔍 skill-lint: escaneando $url …"
+  out="$(run_lint "$url" 2>&1)"; rc=$?
+  case $rc in
+    0)
+      echo "  ${C_GRN}✅ SEGURO${C_OFF}"; GATE_OK+=("$src"); return 0 ;;
+    1)
+      echo "  ${C_YEL}⚠️  AVISO — hallazgos:${C_OFF}"
+      printf '%s\n' "$out" | tail -25 | sed 's/^/     /'
+      if [[ ${SCAN_ALLOW_WARN:-0} == 1 ]]; then
+        echo "  ⚠️  se instala por --yes-warn"; GATE_WARN_OK+=("$src"); return 0
+      fi
+      if [[ ! -t 0 ]]; then
+        echo "  ⚠️  sin TTY: no se instala (si ya lo revisaste: reintentá con --yes-warn)"
+        GATE_BLOCKED+=("$src (aviso, sin TTY)"); return 1
+      fi
+      local r; printf '  %s¿Instalar de todos modos? [s/N]%s ' "$C_YEL" "$C_OFF"; read -r r
+      if [[ $r == s || $r == S ]]; then GATE_WARN_OK+=("$src"); return 0; fi
+      GATE_BLOCKED+=("$src (aviso, rechazado)"); return 1 ;;
+    2)
+      printf '%s  🔴 TÓXICO: %s — NO SE INSTALA. Por favor verificá este skill a mano antes de instalarlo.%s\n' "$C_RED" "$src" "$C_OFF"
+      printf '%s\n' "$out" | tail -25 | sed 's/^/     /'
+      GATE_BLOCKED+=("$src (TÓXICO)"); return 1 ;;
+    *)
+      printf '%s  FALLA skill-lint (exit %s) en %s — no se instala (fail-closed).%s\n' "$C_RED" "$rc" "$src" "$C_OFF"
+      printf '%s\n' "$out" | tail -5 | sed 's/^/     /'
+      GATE_ERR+=("$src (lint exit $rc)"); return 1 ;;
+  esac
+}
+
+gate_summary() {
+  echo "─── resumen del gate ───"
+  echo "  limpios instalados : ${#GATE_OK[@]}"
+  echo "  con aviso aprobados: ${#GATE_WARN_OK[@]}${GATE_WARN_OK[*]:+ → ${GATE_WARN_OK[*]}}"
+  if [[ ${#GATE_BLOCKED[@]} -gt 0 ]]; then
+    printf '  %s🔴 bloqueados: %s%s\n' "$C_RED" "${GATE_BLOCKED[*]}" "$C_OFF"
+    echo "     → verificá estos skills a mano antes de instalarlos."
+  fi
+  [[ ${#GATE_ERR[@]} -gt 0 ]] && printf '  errores de lint    : %s\n' "${GATE_ERR[*]}"
+}
+
+cmd_add() { # skillsync add <owner/repo> [--skill nombre] [--yes-warn] | add --from-file <archivo>
+  local SCAN_ALLOW_WARN=0 src="" from_file="" a
+  local -a args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes-warn) SCAN_ALLOW_WARN=1 ;;
+      --from-file) from_file="${2:-}"; shift ;;
+      --help|-h) echo "uso: skillsync add <owner/repo> [--skill nombre] [--yes-warn] | add --from-file <archivo>"; exit 0 ;;
+      *) [[ -z $src ]] && src="$1" || args+=("$1") ;;
+    esac
+    shift
+  done
+  add_one() { # <repo>
+    scan_gate "$1" || return 1
+    echo ">>> npx -y skills add $1 -g -y ${args[*]:-}"
+    if npx -y skills add "$1" -g -y ${args[@]+"${args[@]}"}; then
+      python3 "$LIB/manifest.py" gen "$REPO"
+    else
+      echo "FALLA skills add $1"
+      return 1
+    fi
+  }
+  if [[ -n $from_file ]]; then
+    [[ -f $from_file ]] || { echo "FALLA no existe $from_file"; exit 2; }
+    while IFS= read -r r; do
+      [[ -z ${r//[[:space:]]/} || $r == \#* ]] && continue
+      add_one "$r" || true
+    done < "$from_file"
+  else
+    [[ -z $src ]] && { echo "uso: skillsync add <owner/repo> [--skill nombre] [--yes-warn] | add --from-file <archivo>"; exit 2; }
+    add_one "$src" || { gate_summary; exit 3; }
+  fi
+  gate_summary
 }
 
 # ------------------------------------------------------------------- adopt --
