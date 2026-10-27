@@ -23,7 +23,6 @@ skills-local/             gitignored — skills privados: se enlazan pero NUNCA 
 third-party.yaml          manifest de terceros (generado: `skillsync manifest`)
 mcp/servers.json          servidores MCP SIN secretos ("$VAR" del entorno local)
 install.sh                wrapper retrocompatible → `skillsync link`
-install.ps1               Windows (junctions; skillsync.ps1 pendiente)
 ```
 
 ## Comandos
@@ -133,6 +132,7 @@ queda registrado en `status` (resolver con `skillsync sync`).
 
 - Si un skill ya existía como carpeta real en el destino, se respalda en
   `~/.skillsync/backups/<agente>/` (retención: últimos 5) y se reemplaza por symlink.
-- Windows: `install.ps1` sigue haciendo junctions; el equivalente completo de
-  skillsync (sync/check/update) queda como paso siguiente.
+- Windows: sin instalador propio por ahora. Cuando vuelvas a una PC Windows:
+  mismo bootstrap (gist) clonando el repo y `skillsync` no corre ahí sin un
+  `skillsync.ps1` — pendiente si se vuelve a necesitar.
 - Backups viejos del install.sh anterior: `~/.skillsync/backups/`.
