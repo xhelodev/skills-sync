@@ -19,28 +19,21 @@ Fuente única de **skills personales**, **skills de terceros** (manifest) y
 
 El repo es **privado**: sin credenciales (`gh auth login` o SSH key) el clone falla.
 
-### Flujo 1 — PC nueva (desde cero)
+### Flujo 1 — PC nueva (un comando)
+
+Con `gh` autenticado (`gh auth login`) o tu clave SSH en GitHub:
 
 ```bash
-# 1. autenticación GitHub (si no la tenés)
-gh auth login
-
-# 2. bootstrap: clona el repo a ~/skills-shared y corre install.sh (= skillsync link)
 curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
-
-# 3. instalar TODO: terceros del manifest (escaneados con skill-lint) + MCP + herramientas
-skillsync install
-
-# 4. etiquetar la máquina (una vez; el bootstrap nuevo ya lo hace)
-echo vps > ~/.config/skillsync/machine
-
-# 5. (opcional) auto-update cada 30 min
-skillsync timer install
 ```
 
-Qué hace `install`: `link` (symlinks en los agentes que detecte, backups de lo
-que reemplace, symlink del comando en `~/.local/bin`) + aplica `third-party.yaml`
-con el gate de skill-lint + MCP + herramientas faltantes.
+Clona el repo a `~/skills-shared`, etiqueta la máquina, enlaza tus skills en
+todos los agentes que encuentre y corre `skillsync install` (terceros del
+manifest con gate de skill-lint + MCP + herramientas). Sin terminal interactiva
+(CI), los terceros quedan pendientes: `skillsync install` en una terminal los completa.
+
+Opciones: `SKILLSYNC_MACHINE=vps` (etiqueta), `SKILLSYNC_TIMER=1` (timer),
+destino custom: `... | bash -s -- ~/otra-ruta`.
 
 ### Flujo 2 — ya tenés el repo
 
