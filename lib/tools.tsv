@@ -1,0 +1,9 @@
+# skillsync — herramientas CLI que requieren los skills.
+# Campos (TAB): skill <TAB> herramienta <TAB> chequeo <TAB> instalación
+#   skill      : nombre del skill que la necesita, o * = global (se ofrece en toda máquina)
+#   herramienta: nombre para mostrar
+#   chequeo    : comando que exita 0 si ya está instalada (ej: command -v <bin>)
+#   instalación: comando a mostrar/ejecutar al instalar
+# El chequeo corre con bash -c; la instalación solo se ejecuta tras confirmar
+# (o con --yes). Falsos positivos: comentá la fila con #.
+*	agent-browser	command -v agent-browser	npm install -g agent-browser

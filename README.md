@@ -36,6 +36,7 @@ skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
 skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
+skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta, muestra el comando e instala
 skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
 skillsync mcp                  aplicar mcp/servers.json (Claude Code)
 skillsync timer install        timer systemd user cada 30 min (update --pull-only)
@@ -73,6 +74,20 @@ Forzar: `SKILLSYNC_MACHINE=vps skillsync …`. Las etiquetas actuales: `vps`,
 - Actualizar: `skillsync update` pregunta y muestra cambios antes de aplicar
   (`npx skills update`). **Nunca automático**: un skill son instrucciones que tus
   agentes ejecutan con shell — siempre mirá el diff.
+
+## Herramientas requeridas por skills
+
+`lib/tools.tsv` (TAB): `skill | herramienta | chequeo | instalación`.
+`skill=*` = global (se ofrece en cualquier máquina). Ejemplo:
+
+```
+*	agent-browser	command -v agent-browser	npm install -g agent-browser
+```
+
+- `skillsync tools` — por cada faltante: muestra quién la pide y **el comando exacto**,
+  pregunta `¿Instalar? [s/N]` y lo ejecuta al confirmar; re-verifica después.
+- `skillsync tools --list` solo informa; `--yes` instala sin preguntar (bootstrap).
+- `skillsync check` avisa las faltantes (WARN).
 
 ## Seguridad
 

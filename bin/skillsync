@@ -9,6 +9,7 @@
 #   skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
 #   skillsync install              PC nueva: link + terceros del manifest + MCP
 #   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
+#   skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta y muestra el comando
 #   skillsync adopt <nombre>       capturar un skill que vive en la carpeta de un agente
 #   skillsync mcp                  aplicar mcp/servers.json (Claude Code)
 #   skillsync timer install        timer systemd user cada 30 min (update --pull-only)
@@ -55,6 +56,7 @@ main() {
     update)  cmd_update "$@" ;;
     sync)    cmd_sync ;;
     manifest) python3 "$LIB/manifest.py" gen "$REPO" ;;
+    tools)   cmd_tools "$@" ;;
     adopt)   cmd_adopt "$@" ;;
     mcp)     python3 "$LIB/mcp.py" "$REPO/mcp/servers.json" ;;
     timer)   cmd_timer "${1:-status}" ;;
@@ -90,6 +92,33 @@ load_agents() {
     AGENT_DIRS+=("${dir/#\~/$HOME}")
     AGENT_METHODS+=("${method:-symlink}")
   done < "$tsv"
+}
+
+machine_matches() { # lista-de-.machines → return 0 si aplica a esta máquina
+  [[ $1 == *'*'* ]] && return 0
+  local tag
+  local -a tags
+  IFS=',' read -ra tags <<< "$1"
+  for tag in "${tags[@]}"; do
+    tag="${tag//[[:space:]]/}"
+    [[ "$tag" == "$MACHINE" ]] && return 0
+  done
+  return 1
+}
+
+present_skills() { # nombres de skills presentes y aplicables en esta máquina (propios + terceros)
+  local d name out=""
+  for d in "$REPO"/skills/*/ "$REPO"/skills-local/*/; do
+    [[ -d $d ]] || continue
+    name="$(basename "$d")"
+    if [[ -f $d/.machines ]]; then
+      machine_matches "$(tr -d ' \n' < "$d/.machines")" && out+="$name "
+    else
+      out+="$name "
+    fi
+  done
+  out+="$(python3 -c "import json,os;p=os.path.expanduser('~/.agents/.skill-lock.json');print(' '.join(json.load(open(p))['skills'].keys()) if os.path.exists(p) else '')" 2>/dev/null || true)"
+  echo "$out"
 }
 
 agent_index() { # nombre → índice en AGENT_* o return 1
@@ -267,6 +296,17 @@ cmd_check() {
     done
   done
 
+  # 6. herramientas CLI requeridas por skills (lib/tools.tsv)
+  if [[ -f $REPO/lib/tools.tsv ]]; then
+    local present; present="$(present_skills)"
+    while IFS=$'\t' read -r skill tool check install; do
+      [[ -z ${tool:-} || ${skill:-} == \#* ]] && continue
+      [[ "$skill" == "*" || " $present " == *" $skill "* ]] || continue
+      bash -c "$check" >/dev/null 2>&1 \
+        || WARNS+=("falta herramienta '$tool' (para: $skill) — skillsync tools")
+    done < "$REPO/lib/tools.tsv"
+  fi
+
   # salida
   local w
   for w in "${WARNS[@]}"; do echo "WARN  $w"; done
@@ -311,19 +351,7 @@ cmd_link() {
       if [[ -f $d/.machines ]]; then
         machines="$(tr -d ' \n' < "$d/.machines")"
       else machines='*'; fi
-      hit=0
-      local tag
-      if [[ $machines == *'*'* ]]; then
-        hit=1
-      else
-        local -a tags
-        IFS=',' read -ra tags <<< "$machines"
-        for tag in "${tags[@]}"; do
-          tag="${tag//[[:space:]]/}"
-          [[ "$tag" == "$MACHINE" ]] && hit=1
-        done
-      fi
-      if [[ $hit -ne 1 ]]; then
+      if ! machine_matches "$machines"; then
         echo "· $name → omitido (solo para: $machines)"
         continue
       fi
@@ -420,6 +448,8 @@ cmd_install() {
   fi
   echo "--- MCP ---"
   python3 "$LIB/mcp.py" "$REPO/mcp/servers.json"
+  echo "--- herramientas ---"
+  if [[ -t 0 ]]; then cmd_tools; else cmd_tools --list; fi
 }
 
 # ------------------------------------------------------------------ update --
@@ -527,6 +557,68 @@ cmd_sync() {
     exit 1
   fi
   cmd_link
+}
+
+# ------------------------------------------------------------------- tools --
+
+cmd_tools() {
+  local yes=0 list=0 a
+  for a in "$@"; do
+    case "$a" in
+      --yes) yes=1 ;;
+      --list) list=1 ;;
+    esac
+  done
+  local tsv="$REPO/lib/tools.tsv"
+  if [[ ! -f $tsv ]]; then echo "tools: sin lib/tools.tsv — nada que hacer"; return 0; fi
+
+  local present; present="$(present_skills)"
+  declare -A T_CHECK T_INSTALL T_WANTS
+  local skill tool check install
+  while IFS=$'\t' read -r skill tool check install; do
+    [[ -z ${tool:-} || ${skill:-} == \#* ]] && continue
+    [[ "$skill" == "*" || " $present " == *" $skill "* ]] || continue
+    T_CHECK[$tool]="$check"; T_INSTALL[$tool]="$install"
+    T_WANTS[$tool]="${T_WANTS[$tool]:+${T_WANTS[$tool]}, }$skill"
+  done < "$tsv"
+  [[ ${#T_CHECK[@]} -eq 0 ]] && { echo "tools: ningún skill de esta máquina requiere herramientas"; return 0; }
+
+  local ok=() missing=()
+  for tool in "${!T_CHECK[@]}"; do
+    if bash -c "${T_CHECK[$tool]}" >/dev/null 2>&1; then ok+=("$tool"); else missing+=("$tool"); fi
+  done
+  for tool in "${ok[@]}"; do echo "OK    $tool (lo piden: ${T_WANTS[$tool]})"; done
+  for tool in "${missing[@]}"; do
+    echo "FALTA $tool (lo piden: ${T_WANTS[$tool]})"
+    echo "      cmd: ${T_INSTALL[$tool]}"
+  done
+  [[ ${#missing[@]} -eq 0 ]] && { echo "tools: todo instalado"; return 0; }
+  [[ $list == 1 ]] && return 0
+  if [[ ! -t 0 && $yes == 0 ]]; then
+    echo "tools: sin TTY — re-ejecutá con --yes o instalá a mano"
+    exit 2
+  fi
+
+  local r
+  for tool in "${missing[@]}"; do
+    if [[ $yes == 1 ]]; then r=s
+    else
+      printf '¿Instalar %s? → %s [s/N] ' "$tool" "${T_INSTALL[$tool]}"
+      read -r r
+    fi
+    if [[ $r == s || $r == S ]]; then
+      echo ">>> ${T_INSTALL[$tool]}"
+      if bash -c "${T_INSTALL[$tool]}"; then
+        if bash -c "${T_CHECK[$tool]}" >/dev/null 2>&1; then
+          echo "OK    $tool instalado"
+        else
+          echo "WARN  $tool: el comando corrió pero el chequeo sigue fallando"
+        fi
+      else
+        echo "FALLA instalando $tool"
+      fi
+    fi
+  done
 }
 
 # ------------------------------------------------------------------- adopt --

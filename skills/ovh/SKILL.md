@@ -228,8 +228,11 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 > (100.86.45.71), `ts-hermes-api` → `web-hermes-api` (100.72.215.102),
 > `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-traceway` → `web-traceway`
 > (100.111.61.44), `ts-catcore` → `web-catcore` (100.106.180.64), `ts-hermes-admin` →
-> `web-hermes-admin` (100.68.234.18), `ts-docmost` → `web-docmost` (100.66.43.20) y
+> `web-hermes-admin` (100.68.234.18) y
 > `ts-mate-tv` (red de mate-tv). Los vhosts 8443 y 8445 **ya no existen**.
+> **Docmost fue desmantelado el 2026-10-27**: el puerto 3100 y el nodo tailnet
+> `web-docmost` (100.66.43.20) están libres; su registro en la consola de
+> Tailscale debe borrarse a mano si aún aparece.
 
 | Puerto | Qué | Backend | Alcance |
 | --- | --- | --- | --- |
@@ -245,7 +248,7 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
 | 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | bind `0.0.0.0:8080` (ufw bloquea desde internet) | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
 | 8081 | API del panel mate-tv | `127.0.0.1:8081` | loopback (commit `eb70b7b` del repo lo movió desde la IP tailnet) |
-| 3100 | Docmost (web) | contenedor docmost → `127.0.0.1:3100` | sidecar `ts-docmost` (`web-docmost`, 100.66.43.20); stack `~/app/docmost` (Postgres+Redis sin ports, datos en `./data` `./database` `./redis`) |
+| 3100 | *(libre)* | — | era Docmost, desmantelado 2026-10-27; nodo tailnet `web-docmost` (100.66.43.20) liberado |
 | 8444 | Hermes Admin web (Next.js) | contenedor hermes-admin-web → `127.0.0.1:8444` | sidecar `ts-hermes-admin` (`web-hermes-admin`); requiere `api/.env` completo |
 | 8445 | Hermes Admin API (Fastify, `/ws/v1`) | contenedor hermes-admin-api → `127.0.0.1:8445` | sidecar `ts-hermes-admin`, handler `/ws/v1`; ufw permite docker → `100.97.166.4:443` (dashboard) |
 | 8446 | Traceway RUM | nginx `home` → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel `otel.carpincho.dev`) |

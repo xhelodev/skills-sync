@@ -18,6 +18,7 @@ registrados en `third-party.yaml`.
 | "traé lo nuevo / actualizá" | `skillsync update` (terceros: pide confirmación y muestra diff) |
 | "instalá todo en esta máquina" | `skillsync install` |
 | "registrá un tercero nuevo" | `npx -y skills add <fuente> --skill <n>` → `skillsync manifest` → `skillsync sync` |
+| "falta una herramienta / instalala" | `skillsync tools` (muestra el comando, pide confirmación) |
 | "capturá este skill suelto" | `skillsync adopt <nombre> --from <agente>` |
 
 ## Reglas
@@ -28,6 +29,10 @@ registrados en `third-party.yaml`.
 - Skills privados van en `~/skills-shared/skills-local/` (gitignored: se enlazan,
   jamás se commitean).
 - Terceros jamás se auto-actualizan: `update` muestra el diff antes de aplicar.
+- Herramientas CLI que necesitan los skills: tabla `lib/tools.tsv`;
+  `skillsync tools` detecta las que faltan, **muestra el comando de instalación
+  y pide confirmación antes de ejecutarlo** (`--list` solo lista, `--yes` sin preguntar).
+  `check` avisa de las faltantes.
 - No tocar `~/.claude/skills/synced/` (claude.ai) ni re-enlazar los de
   `~/.agents/skills` (los maneja el CLI `npx skills`).
 
