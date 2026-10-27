@@ -41,7 +41,7 @@ PCs: `git pull && ./install.sh`. No crear skills personales fuera del repo.
 - LiveSync (Obsidian): **eliminado 2026-10-26** a petición del usuario (lápida completa en skill `ovh` §8.1); el puerto 5984 y el nodo tailnet `web-livesync` (100.104.63.52) quedaron libres. Lección que sí aplica: los sidecars se llaman `web-*` para quedar al final y diferenciarse de dispositivos reales (renombrados a web-* oct 2026; el rename conserva IP y re-emite cert solo, pero `tailscale serve` puede tardar ~1 min en propagar el DNSName tras `set --hostname`).
 - Puertos libres: OTLP `4317`/`4318` (8444/8445 ahora son de hermes-admin: web/api en loopback).
 - Vigilante del índice: cron Hermes `index-servicios` (id `4457fa1e772b`, cada 30m, monitor `~/.hermes/scripts/services-monitor.sh`). Detecta servicios web nuevos en puertos del tailnet/contenedores; el agente agrega la entrada a `src/data/services.ts`, hace `./build.sh` y avisa en Telegram topic `alertas`. Servicios ambiguos (solo loopback, no web, transitorios) los consulta en vez de agregarlos.
-- `opencode` ajeno en `127.0.0.1:3000`: ejecuta comandos con `sudo`. Si algo cambia sin explicación, revisar `journalctl` del usuario `debian` y sus `COMMAND=` antes de atribuirlo a un fallo.
+- OpenCode Web: UI web del agente (`opencode serve` v2, unit de usuario `opencode-serve.service`) en `127.0.0.1:3000`. Publicada con sidecar `ts-opencode` → `https://web-opencode.tail3522d6.ts.net/` (27 oct 2026).
 
 Inventario detallado: `references/servicios.md`.
 
@@ -74,7 +74,7 @@ journalctl _COMM=sudo --since "1 hour ago" | tail -50
 
 - Patrón Node/sencillo: Dockerfile `node:24-slim` (o slim de la versión usada), compose con `build: .`, publish `"127.0.0.1:<PUERTO>:3000"`, `HOST: 0.0.0.0` dentro del container, volúmenes para datos/estado y `restart: unless-stopped`.
 - Acceso tailnet: cada servicio se publica con un sidecar `tailscale/tailscale` del repo `~/app/ts-urls` (GitHub `xhelodev/tailscale-sidecars`) (hostname propio, `serve/<nombre>.json` que proxifica a `127.0.0.1:<puerto>`, estado en `state/<nombre>`). La URL queda `https://<nombre>.tail3522d6.ts.net/` con cert válido. Commit + push del repo tras tocarlo. (`tailscale serve --bg` en el nodo principal ya no se usa; `serve status` da vacío.)
-- Verificar el serve con `curl --resolve <host.ts.net>:<puerto>:100.85.208.44 https://<host>.ts.net:<puerto>/`: curl contra `127.0.0.1:<puerto_serve>` da connection refused aunque el serve esté bien (solo escucha vía tailscaled, no en loopback).
+- Verificar el serve con `curl --resolve <host.ts.net>:<puerto_serve>:<IP_tailscale_del_sidecar> https://<host>.ts.net:<puerto_serve>/`: contra `127.0.0.1:<puerto_serve>` da connection refused (solo escucha vía tailscaled), y contra `100.85.208.44` (IP del nodo principal) da mismatch de certificado, porque responde el nodo principal y no el sidecar. Sacar la IP del sidecar con `docker exec ts-<nombre> tailscale ip -4`.
 - Lanzar el contenedor con `docker compose create && docker compose start`, NO `compose up`: el hook de `terminal` marca `compose up` como proceso long-lived y lo bloquea en foreground aunque `-d` devuelva al instante.
 
 ## Auto-deploy de repos (cron)

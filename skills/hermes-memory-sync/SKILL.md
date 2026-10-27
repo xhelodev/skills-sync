@@ -68,3 +68,7 @@ Arquitectura (desde 2026-10-26):
 5. En rsync, specs de ARCHIVO suelto no llevan `/` final: `"$src"/ "$dst"/`
    falla con "Not a directory". El sync script distingue dir (con --delete) de
    fichero (directo).
+6. Desde 2026-10-26 catcore-mcp exige auth: `MCP_AUTH_TOKEN` en
+   `~/app/catcore/.env`, header `Authorization: Bearer <token>` (único formato
+   aceptado). El mirror lo lee del .env en cada corrida — si vuelve el 401,
+   mirar ahí, no hardcodear el token.

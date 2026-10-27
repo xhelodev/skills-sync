@@ -115,6 +115,7 @@ hay vhosts 8443/8445 en el gateway):
 | `web-catcore` (100.106.180.64) | Catcore (notas) | 127.0.0.1:4000 UI, 4001 API | sidecar `ts-catcore`; handler `/api/` → `4001/api` |
 | `web-hermes-admin` (100.68.234.18) | Hermes Admin (cliente web de Hermes) | 127.0.0.1:8444 web, 8445 API | sidecar `ts-hermes-admin`; handler `/ws/v1` → `8445/ws/v1` (websocket); requiere `api/.env` completo para arrancar |
 | `ts-mate-tv` | mate-tv | red `mate-tv_default` | panel en `0.0.0.0:8080` (público vía `tv.chelo.xyz`, CF Tunnel; ufw bloquea 8080 desde internet) y API en `127.0.0.1:8081` (loopback, commit `eb70b7b` lo movió desde la IP tailnet) |
+| `web-docmost` (100.66.43.20) | Docmost (wiki colaborativa) | 127.0.0.1:3100 | sidecar `ts-docmost`; stack en `/home/debian/app/docmost` (Postgres+Redis solo red interna) |
 
 **Loopback / otros**:
 

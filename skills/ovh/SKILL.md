@@ -228,8 +228,8 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 > (100.86.45.71), `ts-hermes-api` → `web-hermes-api` (100.72.215.102),
 > `ts-hermes-dash` → `web-hermes-dash` (100.97.166.4), `ts-traceway` → `web-traceway`
 > (100.111.61.44), `ts-catcore` → `web-catcore` (100.106.180.64), `ts-hermes-admin` →
-> `web-hermes-admin` (100.68.234.18) y `ts-mate-tv`
-> (red de mate-tv). Los vhosts 8443 y 8445 **ya no existen**.
+> `web-hermes-admin` (100.68.234.18), `ts-docmost` → `web-docmost` (100.66.43.20) y
+> `ts-mate-tv` (red de mate-tv). Los vhosts 8443 y 8445 **ya no existen**.
 
 | Puerto | Qué | Backend | Alcance |
 | --- | --- | --- | --- |
@@ -245,6 +245,7 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | 5080 | Traceway UI/OTLP | contenedor traceway → `127.0.0.1:5080` | sidecar `ts-traceway` (`web-traceway`) |
 | 8080 | panel mate-tv (contenedor `mate-tv-mate-tv-1`) | bind `0.0.0.0:8080` (ufw bloquea desde internet) | **público** solo vía `tv.chelo.xyz` (Cloudflare Tunnel) |
 | 8081 | API del panel mate-tv | `127.0.0.1:8081` | loopback (commit `eb70b7b` del repo lo movió desde la IP tailnet) |
+| 3100 | Docmost (web) | contenedor docmost → `127.0.0.1:3100` | sidecar `ts-docmost` (`web-docmost`, 100.66.43.20); stack `~/app/docmost` (Postgres+Redis sin ports, datos en `./data` `./database` `./redis`) |
 | 8444 | Hermes Admin web (Next.js) | contenedor hermes-admin-web → `127.0.0.1:8444` | sidecar `ts-hermes-admin` (`web-hermes-admin`); requiere `api/.env` completo |
 | 8445 | Hermes Admin API (Fastify, `/ws/v1`) | contenedor hermes-admin-api → `127.0.0.1:8445` | sidecar `ts-hermes-admin`, handler `/ws/v1`; ufw permite docker → `100.97.166.4:443` (dashboard) |
 | 8446 | Traceway RUM | nginx `home` → `127.0.0.1:5080` | **público, solo `/api/report`** (CF Tunnel `otel.carpincho.dev`) |
@@ -272,5 +273,6 @@ tarjeta en `services.ts`, `build.sh`, verificar).
 | No arranca al boot | `systemctl --user enable opencode-serve` (y `loginctl enable-linger debian`). |
 | Hermes `/v1` da 401 | Falta la API key (bearer). Es esperado, no es una falla. |
 | Traceway muere por OOM | Verificá `DUCKDB_MEMORY_LIMIT`/`mem_limit`; no los subas sin medir. |
+| Disco lleno / 90%+ | Ver `~/scripts/disk-cleanup.log` y `docker builder du`. El caché de build vive en `/var/lib/containerd` (snapshotter buildkit), NO en `/var/lib/docker` (que parece diminuto, ~450 M). Diagnóstico 2026-10-27: el auto-deploy (cada 10 min) genera caché nuevo continuo, así que un filtro por antigüedad (`until=7d`) nunca borra nada y el disco creció ~5,7 G/día hasta 92%. Fix en `disk-cleanup.sh`: `docker builder prune -f --keep-storage 4GB` + `docker image prune -a -f --filter until=168h`. Limpieza profunda manual: `docker builder prune -f --all` + `docker image prune -a -f` (liberó 27 G; los contenedores en uso no se tocan). |
 | HTTPS roto / cert vencido | `/home/debian/app/home/renew-cert.sh`. |
 | Servicio nuevo inalcanzable por tailnet | Falta el vhost en `nginx.conf` + tarjeta en `services.ts` + `build.sh`; dentro de contenedores MagicDNS **no** resuelve (usar `extra_hosts`). |
