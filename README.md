@@ -1,80 +1,116 @@
-# skills-shared
+# skills-shared + skillsync
 
-Fuente única de mis **skills personales** y **definiciones MCP**, sincronizada entre PCs
-(Windows/Linux) y tres herramientas: **Hermes**, **OpenCode** y **Claude Code**
-(los tres leen el mismo formato `SKILL.md` de Anthropic).
+Fuente única de **skills personales**, **skills de terceros** (manifest) y
+**definiciones MCP**, sincronizada entre PCs (Windows/Linux) y todos los agentes:
+**Claude Code, OpenCode, Cursor, Codex, Hermes y pi**.
+
+Principios:
+
+- **Una copia física por skill por máquina**: los agentes lo ven por symlink
+  (pi: por settings). Editar una vez cambia para todos al instante.
+- **Terceros los enlaza el CLI `npx skills`** (vercel-labs) en `~/.agents/skills`;
+  acá solo se *manifiestan* y auditan. Nunca se auto-actualizan en silencio.
+- `~/.claude/skills/synced/` lo gestiona claude.ai — **no se toca**.
 
 ## Estructura
 
 ```
-skills/<nombre>/SKILL.md   el skill (con sus references/ si tiene)
-skills/<nombre>/.machines  opcional: máquinas donde aplica, separadas por coma
-                           (ej: "vps", o "*" = todas; default "*")
-skills/<nombre>/.targets   opcional: herramientas destino (hermes,opencode,claude;
-                           default: todas las instaladas)
-mcp/servers.json           servidores MCP SIN secretos
-install.sh                 instalador Linux/macOS (symlinks)
-install.ps1                instalador Windows (junctions, sin admin)
+bin/skillsync             el comando (ver abajo)
+lib/agents.tsv            registro de agentes (nombre, dir-base, dir-skills, método)
+                          — agregar un agente nuevo = una línea, sin tocar código
+skills/<nombre>/SKILL.md  skills personales (.machines / .targets opcionales)
+skills-local/             gitignored — skills privados: se enlazan pero NUNCA se commitean
+third-party.yaml          manifest de terceros (generado: `skillsync manifest`)
+mcp/servers.json          servidores MCP SIN secretos ("$VAR" del entorno local)
+install.sh                wrapper retrocompatible → `skillsync link`
+install.ps1               Windows (junctions; skillsync.ps1 pendiente)
 ```
 
-## Agregar un skill
+## Comandos
 
-1. `mkdir skills/mi-skill` + escribir `SKILL.md` (frontmatter `name` y `description` con triggers).
-2. Si no aplica a todas las máquinas: `.machines` con la etiqueta (ej: `vps`).
-3. `git add -A && git commit -m "..." && git push` → en cada PC: `git pull && ./install.sh`.
+```
+skillsync sync                 mis ediciones: check + secretos + commit + push + link
+skillsync status               vista rápida: repo, enlaces, terceros, último update
+skillsync check                auditoría: frontmatter, colisiones, manifest, enlaces
+skillsync update [--pull-only] traer cambios del remoto (timer usa --pull-only)
+skillsync install              completo: link + terceros del manifest + MCP
+skillsync link                 solo re-enlazar (huérfanos incluidos)
+skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
+skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
+skillsync mcp                  aplicar mcp/servers.json (Claude Code)
+skillsync timer install        timer systemd user cada 30 min (update --pull-only)
+```
 
-## Preparar una PC nueva (una línea)
+`skillsync` queda en `~/.local/bin` (lo enlaza `link` solo).
 
-Bootstrap público (gist): usa `SKILLSYNC_TOKEN` si está exportado, si no `gh auth token`
-(si hay gh autenticado), si no pide un token fine-grained de solo lectura de este repo
-por teclado — y nunca lo guarda (limpia la URL remota tras clonar).
+## Flujo diario
+
+- **Edité un skill** (vos o un agente, da igual — es el mismo archivo):
+  `skillsync sync`. Listo.
+- **¿Cómo está todo?**: `skillsync status` (rápido) o `skillsync check` (completo).
+- **En las otras máquinas**: el timer trae los cambios solo (cada 30 min en el VPS).
+  A mano: `skillsync update`.
+
+## PC nueva (2 pasos)
 
 ```bash
-# Linux / macOS
+# 1. bootstrap (gist público; usa gh o pide PAT de solo lectura, nunca lo guarda)
 curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.sh | bash
 
-# Windows (PowerShell)
-irm https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/bootstrap.ps1 | iex
+# 2. instalar todo (personales + terceros + MCP)
+skillsync install && skillsync manifest && skillsync timer install
 ```
 
-Destino custom: `curl ... | bash -s -- ~/otra-ruta`. Sin gh en la máquina:
-`SKILLSYNC_TOKEN=github_pat_xxx curl ... | bash` (PAT de solo lectura, solo este repo).
+El instalador escribe la etiqueta de máquina (`~/.config/skillsync/machine`).
+Forzar: `SKILLSYNC_MACHINE=vps skillsync …`. Las etiquetas actuales: `vps`,
+`pc` (Windows).
 
-URLs fijadas a la revisión `6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6` (inmutables):
-- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6/bootstrap.sh`
-- `https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5acc232b/raw/6c5e70f7fb2adf8b1240ec8a6c3ab22ead4360c6/bootstrap.ps1`
+## Skills de terceros
 
-Alternativa manual (usa **SSH**, no HTTPS):
+- Instalar: `npx -y skills add <fuente> --skill <nombre>` → después
+  `skillsync manifest` (registra en third-party.yaml) y `skillsync sync`.
+- Quitar: `npx skills remove` → `skillsync manifest` → `skillsync sync`.
+- Actualizar: `skillsync update` pregunta y muestra cambios antes de aplicar
+  (`npx skills update`). **Nunca automático**: un skill son instrucciones que tus
+  agentes ejecutan con shell — siempre mirá el diff.
 
-```bash
-git clone git@github.com:xhelodev/skills-shared.git ~/skills-shared
-cd ~/skills-shared && ./install.sh
-```
+## Seguridad
 
-> El repo es privado. Clonar por HTTPS (`https://github.com/...`) falla con
-> `remote: Repository not found` si git no tiene credenciales: GitHub no acepta la
-> contraseña de la cuenta para operaciones git. Si preferís HTTPS, configurá un PAT
-> o `gh auth setup-git`. Con SSH solo necesitás la clave agregada a GitHub
-> (`ssh -T git@github.com` debe saludarte como `xhelodev`).
+- Repo **privado**. Los skills "medio privados" van en `skills-local/` (gitignored;
+  `sync` falla si algo de ahí entra al índice).
+- `sync` bloquea el commit si detecta patrones de secretos (`ghp_`, `sk-`,
+  `AKIA`, `BEGIN PRIVATE KEY`…) en `skills/` o `mcp/`. Es una red de seguridad,
+  no una garantía — si está `gitleaks`, sumalo a mano.
+- Bootstrap con PAT fine-grained de solo lectura que nunca se persiste.
 
-El instalador autodetecta la máquina por hostname. Para forzar etiqueta:
-`SKILLSYNC_MACHINE=vps ./install.sh` (Linux) / `$env:SKILLSYNC_MACHINE="vps"; .\install.ps1` (Windows).
+## Timer (VPS)
 
-Si ya existía un skill real en el destino, se mueve a `~/.skillsync/backups/<herramienta>/`
-(no junto al enlace: así la herramienta no lo detecta como skill duplicado).
+`systemctl --user list-timers | grep skillsync` · estado: `skillsync timer status`.
+Corre `update --pull-only`: si el árbol está sucio o divergió, **no toca nada** y
+queda registrado en `status` (resolver con `skillsync sync`).
+
+## Agentes
+
+`lib/agents.tsv` — el agente cuenta como instalado si su dir-base existe:
+
+| agente | dir-base | skills | método |
+|---|---|---|---|
+| claude | `~/.claude` | `~/.claude/skills` | symlink |
+| opencode | `~/.config/opencode` | `~/.config/opencode/skills` | symlink (además lee `~/.claude/skills` y `~/.agents/skills` nativamente) |
+| cursor | `~/.cursor` | `~/.cursor/skills` | symlink |
+| codex | `~/.codex` | `~/.codex/skills` | symlink |
+| hermes | `~/.hermes` | `~/.hermes/skills` | symlink (hermes gestiona su dir: solo enlaces planos, no reordenar) |
+| pi | `~/.pi` | `~/.pi/settings.json` | settings (`skills: [~/skills-shared/skills]`; también lee `~/.agents/skills` nativamente) |
 
 ## MCP
 
-- `mcp/servers.json` **nunca lleva secretos**: un valor `"$MI_VAR"` se resuelve de las
-  variables de entorno de cada PC al momento de aplicar. Nada de keys en el repo.
-- Soporta `env` (stdio) y `headers` (http); en `headers` el `$VAR` puede ir embebido
-  (`"Authorization": "Bearer $MI_TOKEN"`). Si falta la variable, ese servidor se omite.
-- Se instalan en el scope `user` de Claude Code (sin tocar config por proyecto).
-- v1 aplica automáticamente a **Claude Code** (`claude mcp add`).
-  OpenCode (sección `mcp` de `opencode.jsonc`) y Hermes (`hermes config set`) quedan
-  como paso manual hasta automatizarlos con un servidor real.
+`mcp/servers.json` sin secretos (`"$MI_VAR"` se resuelve del entorno al aplicar).
+`skillsync mcp` los aplica a Claude Code (scope user). OpenCode y Hermes: manual.
 
 ## Notas
 
-- `~/.claude/skills/synced/` lo gestiona Claude.ai (skills de la cuenta) — **no se toca** ni se sincroniza.
-- Los skills con `.machines: vps` solo se enlazan donde la máquina sea el VPS.
+- Si un skill ya existía como carpeta real en el destino, se respalda en
+  `~/.skillsync/backups/<agente>/` (retención: últimos 5) y se reemplaza por symlink.
+- Windows: `install.ps1` sigue haciendo junctions; el equivalente completo de
+  skillsync (sync/check/update) queda como paso siguiente.
+- Backups viejos del install.sh anterior: `~/.skillsync/backups/`.
