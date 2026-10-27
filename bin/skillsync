@@ -28,6 +28,18 @@ shopt -s nullglob
 # regex de secretos (se aplica solo a skills/ y mcp/, jamás a bin/ que la define)
 SECRET_RE='ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|-----BEGIN [A-Z ]*PRIVATE KEY'
 
+# ask_yn "Prompt text?" [y|n] — English yes/no prompt, single keypress (no Enter).
+# Sets REPLY_YN to the pressed key (lowercase); bare Enter picks the default.
+ask_yn() {
+  printf '%s [%s] ' "$1" "$2"
+  local k
+  read -rsn1 k
+  k="${k,,}"
+  [[ -z $k || $k == $'\n' || $k == $'\r' ]] && k="$2"
+  echo "$k"
+  REPLY_YN="$k"
+}
+
 main() {
   local SELF REPO MACHINE LIB STATE_DIR BIN_LINK
   SELF="$(readlink -f "$0")"
@@ -454,13 +466,16 @@ pick_sources() { # pregunta por fuente y guarda la selección en third-party.loc
   while IFS=$'\t' read -r s n; do srcs+=("$s"); nums+=("$n"); done \
     < <(python3 "$LIB/manifest.py" counts "$REPO" "$MACHINE")
   [[ ${#srcs[@]} -eq 0 ]] && { echo "pick: ninguna fuente aplica a esta máquina"; return 1; }
-  echo "── Skills de terceros: ¿cuáles instalás en esta máquina ($MACHINE)? ──"
+  echo "── Third-party skills: which ones to install on this machine ($MACHINE)? ──"
   local tmp="$file.tmp"; : > "$tmp"
-  local total=0 i j r
+  local total=0 i j k
   for i in "${!srcs[@]}"; do
-    printf '  %s (%s skills)  [S/n/a=todo el resto] ' "${srcs[i]}" "${nums[i]}"
-    read -r r
-    case "${r,,}" in
+    printf '  %s (%s skills)  [y/n/a=all the rest] ' "${srcs[i]}" "${nums[i]}"
+    read -rsn1 k
+    k="${k,,}"
+    [[ -z $k ]] && k=y
+    echo "$k"
+    case "$k" in
       a) for ((j = i; j < ${#srcs[@]}; j++)); do echo "${srcs[j]}" >> "$tmp"; total=$((total + nums[j])); done; break ;;
       n) : ;;
       *) echo "${srcs[i]}" >> "$tmp"; total=$((total + nums[i])) ;;
@@ -573,9 +588,8 @@ cmd_update() {
   local lock_n
   lock_n="$(python3 -c "import json,os;p=os.path.expanduser('~/.agents/.skill-lock.json');print(len(json.load(open(p))['skills']) if os.path.exists(p) else 0)" 2>/dev/null || echo 0)"
   if [[ $lock_n -gt 0 ]] && [[ -t 0 ]]; then
-    printf '¿Actualizar skills de terceros ahora? (muestra cambios antes de aplicar) [s/N] '
-    local r; read -r r
-    if [[ $r == s || $r == S ]]; then
+    ask_yn "Update third-party skills now? (shows changes before applying)" n
+    if [[ $REPLY_YN == y ]]; then
       npx -y skills update
       python3 "$LIB/manifest.py" gen "$REPO"
     fi
@@ -667,12 +681,12 @@ cmd_tools() {
 
   local r
   for tool in "${missing[@]}"; do
-    if [[ $yes == 1 ]]; then r=s
+    if [[ $yes == 1 ]]; then r=y
     else
-      printf '¿Instalar %s? → %s [s/N] ' "$tool" "${T_INSTALL[$tool]}"
-      read -r r
+      ask_yn "Install $tool? → ${T_INSTALL[$tool]}" n
+      r=$REPLY_YN
     fi
-    if [[ $r == s || $r == S ]]; then
+    if [[ $r == y ]]; then
       echo ">>> ${T_INSTALL[$tool]}"
       if bash -c "${T_INSTALL[$tool]}"; then
         if bash -c "${T_CHECK[$tool]}" >/dev/null 2>&1; then
@@ -713,8 +727,8 @@ scan_gate() { # <owner/repo|url> → 0=instalar, 1=no instalar (fail-closed)
         echo "  ⚠️  sin TTY: no se instala (si ya lo revisaste: reintentá con --yes-warn)"
         GATE_BLOCKED+=("$src (aviso, sin TTY)"); return 1
       fi
-      local r; printf '  %s¿Instalar de todos modos? [s/N]%s ' "$C_YEL" "$C_OFF"; read -r r
-      if [[ $r == s || $r == S ]]; then GATE_WARN_OK+=("$src"); return 0; fi
+      local r; printf '%s' "$C_YEL"; ask_yn "  Install anyway?" n; r=$REPLY_YN; printf '%s' "$C_OFF"
+      if [[ $r == y ]]; then GATE_WARN_OK+=("$src"); return 0; fi
       GATE_BLOCKED+=("$src (aviso, rechazado)"); return 1 ;;
     2)
       printf '%s  🔴 TÓXICO: %s — NO SE INSTALA. Por favor verificá este skill a mano antes de instalarlo.%s\n' "$C_RED" "$src" "$C_OFF"
