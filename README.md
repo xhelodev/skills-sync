@@ -1,4 +1,4 @@
-# skillsync + skillsync
+# skillsync
 
 Fuente única de **skills personales**, **skills de terceros** (manifest) y
 **definiciones MCP**, sincronizada entre PCs (Windows/Linux) y todos los agentes:
