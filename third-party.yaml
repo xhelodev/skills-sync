@@ -10,11 +10,9 @@ sources:
       - ponytail-gain
       - ponytail-help
       - ponytail-review
-  - source: MemPalace/mempalace
+  - source: Gentleman-Programming/engram
     skills:
-      - mempalace
-      - mempalace-recall
-      - mempalace-task
+      - engram-memory-protocol
   - source: anthropics/skills
     skills:
       - claude-api
