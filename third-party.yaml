@@ -55,6 +55,15 @@ sources:
       - workers-best-practices
       - workers-profiling
       - wrangler
+  - source: nextlevelbuilder/ui-ux-pro-max-skill
+    skills:
+      - banner-design
+      - brand
+      - design
+      - design-system
+      - slides
+      - ui-styling
+      - ui-ux-pro-max
   - source: nutlope/hallmark
     skills:
       - hallmark
