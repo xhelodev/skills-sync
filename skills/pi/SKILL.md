@@ -102,6 +102,10 @@ wait
 
 Cada corrida paga el context inicial completo: `-ns -ne` acá es obligatorio, no opcional.
 
+## Costo de la cadena agente→pi (medido)
+
+Delegar en cadena (ej. OpenCode→pi) NUNCA ahorra tokens. Medido 2026-10-28, misma tarea (branding page) y mismo modelo (glm-5.3): **pi directo ~8.6k tokens/$0.017** (contexto base ~2k, primer turno input=196) < **OpenCode directo ~64k/$0.010** (contexto ~18k/turno) < **OpenCode→pi ~133k/$0.032**. El ahorro de pi es su contexto delgado y solo existe corriendo SOLO (Hermes→pi); en cadena lo sepulta el contexto del orquestador. Causas: el orquestador re-paga su contexto en cada turno extra, y pi suma su propio arranque + regenerar output encima. La cadena solo vale para aislar ejecución, sandbox o paralelismo — nunca por economía. En USD pi directo puede costar más pese a usar menos tokens (tarifas Z.ai vs OpenRouter; el output facturable pesa). Tokens por corrida: OpenCode en SQLite ~/.local/share/opencode/opencode.db (tabla message → data.tokens); pi en ~/.pi/agent/sessions/<dir>/*.jsonl (message_end assistant → usage.cost.total). Costo del skill mismo (mismo prompt, skill pi visible vs oculto): con skill ~133k (6+3 turnos, skill carga + verificación obligatoria = +2 turnos del orquestador) vs sin skill ~90k (4+2) → skill = +48% tokens en tareas triviales; lo que compra es disciplina (flags -ns -ne --thinking low para pi y verificación post-ejecución), no ahorro.
+
 ## Trampas
 
 - Sin `--max-turns` ni presupuesto: task abierta = puede dar vueltas largo. Acotar por prompt + `timeout`; si el timeout mata el proceso, la sesión queda y se retoma con `--session-id`.
