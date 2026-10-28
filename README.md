@@ -121,7 +121,7 @@ skillsync repair [ruta]        rebase trabado por borrado upstream: acepta el bo
 skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
-skillsync add <repo>           gatear con skill-lint (0=ok 1=aviso 2=tóxico) + instalar
+skillsync add <repo>           gatear con skill-lint + instalar (--yes-warn / --yes-toxic confirman el veredicto)
 skillsync pick                 elegir qué fuentes de terceros instalar en esta máquina
 skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta, muestra el comando e instala
 skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
@@ -142,6 +142,11 @@ skillsync timer install        timer systemd user cada 30 min (update --pull-onl
   tocaba): `skillsync repair` — acepta el borrado, guarda tus cambios en un tag
   `backup-pre-rebase-*` y termina el rebase. Si el conflicto es de contenido,
   no toca nada y te dice cómo resolverlo a mano.
+- **El gate de skill-lint marcó un skill 🔴 TÓXICO**: ya no bloquea duro.
+  Con TTY te pregunta `Install despite TOXIC verdict?`; para scripts,
+  `skillsync install --yes-toxic` o `skillsync add <repo> --yes-toxic`
+  (también `SCAN_ALLOW_TOXIC=1` como env). Los tóxicos aprobados quedan
+  listados en el resumen del gate — revisalos con calma cuando puedas.
 
 ## Skills de terceros
 
