@@ -13,7 +13,7 @@ Fuente única de **skills personales**, **skills de terceros** (manifest) y
 | git | sí | clonar y actualizar el repo | `git --version` |
 | bash ≥ 4 | sí | corre `skillsync` | `bash --version` |
 | python3 | sí | manifest, MCP y settings de pi | `python3 --version` |
-| node + npx | si usás skills de terceros | `npx skills`, `skill-lint` | `npx --version` |
+| node + npx | si usás skills de terceros | `npx skills` | `npx --version` |
 | gh | recomendado | clonar el repo privado sin líos | `gh auth status` |
 | systemd (user) | no | el timer de auto-update | `systemctl --user status` |
 
@@ -29,7 +29,7 @@ curl -fsSL https://gist.githubusercontent.com/xhelodev/55815c662f8df075ff68151f5
 
 Clona el repo a `~/skillsync`, etiqueta la máquina, enlaza tus skills en
 todos los agentes que encuentre y corre `skillsync install` (terceros del
-manifest con gate de skill-lint + MCP + herramientas). Sin terminal interactiva
+manifest + MCP + herramientas). Sin terminal interactiva
 (CI), los terceros quedan pendientes: `skillsync install` en una terminal los completa.
 
 Opciones: `SKILLSYNC_MACHINE=vps` (etiqueta), `SKILLSYNC_TIMER=1` (timer),
@@ -121,7 +121,7 @@ skillsync repair [ruta]        rebase trabado por borrado upstream: acepta el bo
 skillsync install              completo: link + terceros del manifest + MCP
 skillsync link                 solo re-enlazar (huérfanos incluidos)
 skillsync manifest             regenerar third-party.yaml (después de npx skills add/remove)
-skillsync add <repo>           gatear con skill-lint + instalar (--yes-warn / --yes-toxic confirman el veredicto)
+skillsync add <repo>           instalar skill de terceros (+ regenerar manifest)
 skillsync pick                 elegir qué fuentes de terceros instalar en esta máquina
 skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta, muestra el comando e instala
 skillsync adopt <n> [--from a] mover un skill que vive en la carpeta de un agente al repo
@@ -142,11 +142,6 @@ skillsync timer install        timer systemd user cada 30 min (update --pull-onl
   tocaba): `skillsync repair` — acepta el borrado, guarda tus cambios en un tag
   `backup-pre-rebase-*` y termina el rebase. Si el conflicto es de contenido,
   no toca nada y te dice cómo resolverlo a mano.
-- **El gate de skill-lint marcó un skill 🔴 TÓXICO**: ya no bloquea duro.
-  Con TTY te pregunta `Install despite TOXIC verdict?`; para scripts,
-  `skillsync install --yes-toxic` o `skillsync add <repo> --yes-toxic`
-  (también `SCAN_ALLOW_TOXIC=1` como env). Los tóxicos aprobados quedan
-  listados en el resumen del gate — revisalos con calma cuando puedas.
 
 ## Skills de terceros
 
@@ -196,12 +191,9 @@ máquina aparece como `INFO` en `check` (no es error).
 - `sync` bloquea el commit si detecta patrones de secretos (`ghp_`, `sk-`,
   `AKIA`, `BEGIN PRIVATE KEY`…) en `skills/` o `mcp/`. Es una red de seguridad,
   no una garantía — si está `gitleaks`, sumalo a mano.
-- **Gate de skill-lint**: todo tercero pasa por `npx skill-lint <repo>` antes de
-  instalarse (`skillsync add` / `skillsync install`). SEGURO instala; AVISO pide
-  confirmación; TÓXICO se bloquea en rojo y queda para revisión manual — si la
-  revisión lo aprueba, se instala a mano con `npx -y skills add <repo> -g -y`
-  y queda registrado con `skillsync manifest`. El scanner es estricto y escanea
-  el repo entero (tests incluidos): los bloqueados hay que revisarlos uno por uno.
+- **Sin gate de seguridad**: los skills de terceros se instalan directo con
+  `npx -y skills add <repo> -g -y` y quedan registrados con `skillsync manifest`.
+  Revisá los repos a mano antes de agregarlos.
 - Bootstrap con PAT fine-grained de solo lectura que nunca se persiste.
 
 ## Timer (VPS)

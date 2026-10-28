@@ -110,21 +110,6 @@ json.dump({"version": 3, "skills": {"no-existe": {"source": "fake/repo"}}},
 PY
   env HOME="$MH" python3 "$SRC/lib/manifest.py" compare "$SRC" >/dev/null 2>&1
   assert_rc "manifest compare desalineado: exit 1" 1 env HOME="$MH" python3 "$SRC/lib/manifest.py" compare "$SRC"
-
-  # scan_gate con run_lint stub (los 4 caminos + yes-warn)
-  ( set -euo pipefail
-    source "$T/lib.sh"
-    DRY=0
-    run_lint() { echo "hallazgo fake"; return ${FAKE_RC:-0}; }
-    FAKE_RC=0; scan_gate t/safe            && pass "gate rc0 → instala" || fail "gate rc0"
-    FAKE_RC=1; scan_gate t/warn            && fail "gate rc1 sin TTY instaló" || pass "gate rc1 sin TTY → no instala"
-    SCAN_ALLOW_WARN=1; FAKE_RC=1; scan_gate t/warn2 && pass "gate rc1 --yes-warn → instala" || fail "gate rc1 --yes-warn"
-    SCAN_ALLOW_WARN=0; FAKE_RC=2; scan_gate t/toxic && fail "gate rc2 instaló" || pass "gate rc2 → bloquea"
-    FAKE_RC=3; scan_gate t/err             && fail "gate rc3 instaló" || pass "gate rc3 → fail-closed"
-    # bloqueados = warn-sin-tty + toxic (err va en GATE_ERR)
-    [[ ${#GATE_BLOCKED[@]} -eq 2 && ${#GATE_ERR[@]} -eq 1 ]] \
-      && pass "gate: resumen (2 bloqueados, 1 error)" || fail "gate: resumen bloqueados=${#GATE_BLOCKED[@]} err=${#GATE_ERR[@]}"
-  ) && pass "gate: stub suite" || fail "gate: stub suite rompió"
 }
 
 # ═══════════════════════════════ INTEGRACIÓN ══════════════════════════════
@@ -137,7 +122,7 @@ integ() {
   git -C "$IR" config user.name test && git -C "$IR" config user.email t@t
   mkdir -p "$IH/.claude" "$IH/.config/opencode" "$IH/.config/skillsync" "$IH/.agents" "$T/shim"
   echo vps > "$IH/.config/skillsync/machine"
-  printf '#!/usr/bin/env bash\n# shim: emula npx (skills add / skill-lint)\nif [[ "$*" == *skill-lint* ]]; then echo "hallazgo shim"; exit ${LINT_RC:-0}; fi\nif [[ "$*" == *skills* ]]; then echo "shim: installed"; exit 0; fi\nexit 0\n' > "$T/shim/npx"
+  printf '#!/usr/bin/env bash\n# shim: emula npx (skills add)\nif [[ "$*" == *skills* ]]; then echo "shim: installed"; exit 0; fi\nexit 0\n' > "$T/shim/npx"
   chmod +x "$T/shim/npx"
   # lock de mentira = manifest real (máquina "con terceros instalados")
   REPO="$IR" python3 - "$IH" "$IR" <<'PY'
@@ -219,12 +204,9 @@ PY
   git -C "$IR" fetch -q origin
   [[ -z "$(git -C "$IR" status --porcelain)" ]] && pass "sync: árbol limpio tras commit+push" || fail "sync: quedó sucio"
 
-  # add con gate (shim): seguro instala; tóxico/aviso bloquean
-  assert_rc "add: lint seguro → exit 0" 0 env LINT_RC=0 "$S" add fake/repo
+  # add (shim): instala y el repo queda consistente
+  assert_rc "add: instala → exit 0" 0 "$S" add fake/repo
   assert_rc "add: repo sigue consistente tras add" 0 "$S" check
-  assert_rc "add: lint tóxico → exit 3" 3 env LINT_RC=2 "$S" add fake/toxic
-  assert_rc "add: aviso sin TTY → exit 3" 3 env LINT_RC=1 "$S" add fake/warn
-  assert_rc "add: aviso --yes-warn → exit 0" 0 env LINT_RC=1 "$S" add fake/warn2 --yes-warn
 
   # pi settings (método settings), idempotente
   mkdir -p "$IH/.pi"; echo '{"theme":"dark"}' > "$IH/.pi/settings.json"

@@ -10,7 +10,7 @@
 #   skillsync repair [ruta]        rebase trabado por borrado upstream: acepta el borrado (con backup)
 #   skillsync install              PC nueva: link + terceros del manifest + MCP
 #   skillsync manifest             regenerar third-party.yaml tras npx skills add/remove
-#   skillsync add <repo>           gatear con skill-lint + instalar (--yes-warn/--yes-toxic fuerzan el veredicto)
+#   skillsync add <repo>           instalar skill de terceros (+ regenerar manifest)
 #   skillsync pick                 elegir qué fuentes de terceros instalar en esta máquina
 #   skillsync tools [--list|--yes] herramientas CLI que faltan: pregunta y muestra el comando
 #   skillsync adopt <nombre>       capturar un skill que vive en la carpeta de un agente
@@ -495,14 +495,6 @@ cmd_pick() {
 }
 
 cmd_install() {
-  local SCAN_ALLOW_WARN=${SCAN_ALLOW_WARN:-0} SCAN_ALLOW_TOXIC=${SCAN_ALLOW_TOXIC:-0} a
-  for a in "$@"; do
-    case "$a" in
-      --yes-warn) SCAN_ALLOW_WARN=1 ;;
-      --yes-toxic) SCAN_ALLOW_TOXIC=1 ;;
-      *) echo "instal: flag desconocido '$a' (usá --yes-warn / --yes-toxic)"; exit 2 ;;
-    esac
-  done
   cmd_link
   echo "--- terceros (manifest) ---"
   local out missing line sk src
@@ -520,7 +512,6 @@ cmd_install() {
       [[ " ${srcs[*]:-} " == *" $src "* ]] || srcs+=("$src")
     done <<< "$missing"
     for src in "${srcs[@]}"; do
-      scan_gate "$src" || continue
       while IFS= read -r line; do
         [[ "$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')" != "$src" ]] && continue
         sk="${line#MISSING }"; sk="${sk%%[[:space:]](*}"
@@ -528,7 +519,6 @@ cmd_install() {
         npx -y skills add "$src" --skill "$sk" -g -y || echo "FALLA add $sk — continuar con el resto"
       done <<< "$missing"
     done
-    gate_summary
   elif [[ -n $missing ]]; then
     echo "════════════════════════════════════════════════════════"
     echo "  ⚠️  TERCEROS SIN INSTALAR (corriste sin terminal interactiva)"
@@ -840,91 +830,20 @@ cmd_tools() {
   done
 }
 
-# -------------------------------------------------------------------- gate --
+# ---------------------------------------------------------------------- add --
 
-C_RED=$'\e[1;31m'; C_YEL=$'\e[1;33m'; C_GRN=$'\e[32m'; C_OFF=$'\e[0m'
-GATE_OK=(); GATE_WARN_OK=(); GATE_TOXIC_OK=(); GATE_BLOCKED=(); GATE_ERR=()
-
-run_lint() { timeout 180 npx -y skill-lint "$@"; }
-
-scan_gate() { # <owner/repo|url> → 0=instalar, 1=no instalar (fail-closed)
-  local src="$1" url="$1" out rc
-  [[ $url == */* && $url != http* ]] && url="https://github.com/$url"
-  [[ $DRY == 1 ]] && { echo "(dry) skill-lint $url"; return 0; }
-  echo "🔍 skill-lint: escaneando $url …"
-  out="$(run_lint "$url" 2>&1)"; rc=$?
-  case $rc in
-    0)
-      echo "  ${C_GRN}✅ SEGURO${C_OFF}"; GATE_OK+=("$src"); return 0 ;;
-    1)
-      echo "  ${C_YEL}⚠️  AVISO — hallazgos:${C_OFF}"
-      printf '%s\n' "$out" | tail -25 | sed 's/^/     /'
-      if [[ ${SCAN_ALLOW_WARN:-0} == 1 ]]; then
-        echo "  ⚠️  se instala por --yes-warn"; GATE_WARN_OK+=("$src"); return 0
-      fi
-      if [[ ! -t 0 ]]; then
-        echo "  ⚠️  sin TTY: no se instala (si ya lo revisaste: reintentá con --yes-warn)"
-        GATE_BLOCKED+=("$src (aviso, sin TTY)"); return 1
-      fi
-      local r; printf '%s' "$C_YEL"; ask_yn "  Install anyway?" n; r=$REPLY_YN; printf '%s' "$C_OFF"
-      if [[ $r == y ]]; then GATE_WARN_OK+=("$src"); return 0; fi
-      GATE_BLOCKED+=("$src (aviso, rechazado)"); return 1 ;;
-    2)
-      printf '%s  🔴 TÓXICO: %s — el scanner lo marca riesgoso. Hallazgos:%s\n' "$C_RED" "$src" "$C_OFF"
-      printf '%s\n' "$out" | tail -25 | sed 's/^/     /'
-      if [[ ${SCAN_ALLOW_TOXIC:-0} == 1 ]]; then
-        echo "  🔴 se instala por --yes-toxic (quedó registrado en el resumen)"
-        GATE_TOXIC_OK+=("$src"); return 0
-      fi
-      if [[ ! -t 0 ]]; then
-        echo "  🔴 sin TTY: no se instala (si ya lo revisaste: reintentá con --yes-toxic)"
-        GATE_BLOCKED+=("$src (TÓXICO, sin TTY)"); return 1
-      fi
-      local r; printf '%s' "$C_RED"
-      ask_yn "  Install despite TOXIC verdict?" n; r=$REPLY_YN; printf '%s' "$C_OFF"
-      if [[ $r == y ]]; then
-        echo "  🔴 instalado con advertencia TÓXICO — decisión tuya, quedó en el resumen"
-        GATE_TOXIC_OK+=("$src"); return 0
-      fi
-      GATE_BLOCKED+=("$src (TÓXICO, rechazado)"); return 1 ;;
-    *)
-      printf '%s  FALLA skill-lint (exit %s) en %s — no se instala (fail-closed).%s\n' "$C_RED" "$rc" "$src" "$C_OFF"
-      printf '%s\n' "$out" | tail -5 | sed 's/^/     /'
-      GATE_ERR+=("$src (lint exit $rc)"); return 1 ;;
-  esac
-}
-
-gate_summary() {
-  echo "─── resumen del gate ───"
-  echo "  limpios instalados : ${#GATE_OK[@]}"
-  echo "  con aviso aprobados: ${#GATE_WARN_OK[@]}${GATE_WARN_OK[*]:+ → ${GATE_WARN_OK[*]}}"
-  if [[ ${#GATE_TOXIC_OK[@]} -gt 0 ]]; then
-    printf '  %s🔴 tóxicos aprobados a mano: %s%s\n' "$C_RED" "${GATE_TOXIC_OK[*]}" "$C_OFF"
-    echo "     → revisá esos repos con calma cuando puedas; corrés con permisos completos."
-  fi
-  if [[ ${#GATE_BLOCKED[@]} -gt 0 ]]; then
-    printf '  %s🔴 bloqueados: %s%s\n' "$C_RED" "${GATE_BLOCKED[*]}" "$C_OFF"
-    echo "     → para forzarlos tras revisarlos: skillsync add <repo> --yes-toxic"
-  fi
-  [[ ${#GATE_ERR[@]} -gt 0 ]] && printf '  errores de lint    : %s\n' "${GATE_ERR[*]}"
-  return 0
-}
-
-cmd_add() { # skillsync add <owner/repo> [--skill nombre] [--yes-warn] [--yes-toxic] | add --from-file <archivo>
-  local SCAN_ALLOW_WARN=${SCAN_ALLOW_WARN:-0} SCAN_ALLOW_TOXIC=${SCAN_ALLOW_TOXIC:-0} src="" from_file="" a
+cmd_add() { # skillsync add <owner/repo> [--skill nombre] | add --from-file <archivo>
+  local src="" from_file="" a
   local -a args=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
-      --yes-warn) SCAN_ALLOW_WARN=1 ;;
-      --yes-toxic) SCAN_ALLOW_TOXIC=1 ;;
       --from-file) from_file="${2:-}"; shift ;;
-      --help|-h) echo "uso: skillsync add <owner/repo> [--skill nombre] [--yes-warn] [--yes-toxic] | add --from-file <archivo>"; exit 0 ;;
+      --help|-h) echo "uso: skillsync add <owner/repo> [--skill nombre] | add --from-file <archivo>"; exit 0 ;;
       *) [[ -z $src ]] && src="$1" || args+=("$1") ;;
     esac
     shift
   done
   add_one() { # <repo>
-    scan_gate "$1" || return 1
     echo ">>> npx -y skills add $1 -g -y ${args[*]:-}"
     if npx -y skills add "$1" -g -y ${args[@]+"${args[@]}"}; then
       python3 "$LIB/manifest.py" gen "$REPO"
@@ -940,10 +859,9 @@ cmd_add() { # skillsync add <owner/repo> [--skill nombre] [--yes-warn] [--yes-to
       add_one "$r" || true
     done < "$from_file"
   else
-    [[ -z $src ]] && { echo "uso: skillsync add <owner/repo> [--skill nombre] [--yes-warn] [--yes-toxic] | add --from-file <archivo>"; exit 2; }
-    add_one "$src" || { gate_summary; exit 3; }
+    [[ -z $src ]] && { echo "uso: skillsync add <owner/repo> [--skill nombre] | add --from-file <archivo>"; exit 2; }
+    add_one "$src" || exit 3
   fi
-  gate_summary
 }
 
 # ------------------------------------------------------------------- adopt --
