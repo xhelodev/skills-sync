@@ -10,6 +10,21 @@ sources:
       - ponytail-gain
       - ponytail-help
       - ponytail-review
+  - source: MemPalace/mempalace
+    skills:
+      - mempalace
+      - mempalace-recall
+      - mempalace-task
+  - source: anthropics/skills
+    skills:
+      - claude-api
+      - docx
+      - mcp-builder
+      - pdf
+      - pptx
+      - skill-creator
+      - web-artifacts-builder
+      - xlsx
   - source: blader/humanizer
     skills:
       - humanizer
