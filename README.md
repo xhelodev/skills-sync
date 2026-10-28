@@ -52,7 +52,7 @@ git clone https://github.com/xhelodev/skills-shared.git ~/skillsync
 | `~/.local/state/skillsync/` | resultado del último update |
 | `~/.skillsync/backups/<agente>/` | backups de skills reemplazados (últimos 5) |
 | `~/.claude/skills`, `~/.config/opencode/skills`, `~/.cursor/skills`, `~/.codex/skills`, `~/.hermes/skills` | symlinks por agente |
-| `~/.pi/settings.json` | pi: sin symlinks — agrega `skills: [...]` |
+| `~/.pi/agent/settings.json` | pi: sin symlinks — agrega `skills: [...]` |
 
 ### Verificar que quedó bien
 
@@ -213,7 +213,7 @@ queda registrado en `status` (resolver con `skillsync sync`).
 | cursor | `~/.cursor` | `~/.cursor/skills` | symlink |
 | codex | `~/.codex` | `~/.codex/skills` | symlink |
 | hermes | `~/.hermes` | `~/.hermes/skills` | symlink (hermes gestiona su dir: solo enlaces planos, no reordenar) |
-| pi | `~/.pi` | `~/.pi/settings.json` | settings (`skills: [~/skillsync/skills]`; también lee `~/.agents/skills` nativamente) |
+| pi | `~/.pi/agent` | `~/.pi/agent/settings.json` | settings (`skills: [~/skillsync/skills]`; también lee `~/.agents/skills` nativamente) |
 
 ## MCP
 

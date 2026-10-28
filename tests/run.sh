@@ -209,11 +209,11 @@ PY
   assert_rc "add: repo sigue consistente tras add" 0 "$S" check
 
   # pi settings (método settings), idempotente
-  mkdir -p "$IH/.pi"; echo '{"theme":"dark"}' > "$IH/.pi/settings.json"
+  mkdir -p "$IH/.pi/agent"; echo '{"theme":"dark"}' > "$IH/.pi/agent/settings.json"
   assert_rc "link con pi" 0 "$S" link
-  grep -q "$IR/skills" "$IH/.pi/settings.json" && pass "pi: settings con skills del repo" || fail "pi settings"
+  grep -q "$IR/skills" "$IH/.pi/agent/settings.json" && pass "pi: settings con skills del repo" || fail "pi settings"
   local n
-  n="$(python3 -c "import json;d=json.load(open('$IH/.pi/settings.json'));print(len(d.get('skills',[])))")"
+  n="$(python3 -c "import json;d=json.load(open('$IH/.pi/agent/settings.json'));print(len(d.get('skills',[])))")"
   assert_eq "pi: idempotente (2 entradas: skills + skills-local)" "2" "$n"
 }
 

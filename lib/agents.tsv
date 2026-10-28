@@ -10,4 +10,4 @@ opencode	~/.config/opencode	~/.config/opencode/skills	symlink
 cursor	~/.cursor	~/.cursor/skills	symlink
 codex	~/.codex	~/.codex/skills	symlink
 hermes	~/.hermes	~/.hermes/skills	symlink
-pi	~/.pi	~/.pi/settings.json	settings
+pi	~/.pi/agent	~/.pi/agent/settings.json	settings
