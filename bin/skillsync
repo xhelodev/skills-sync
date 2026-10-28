@@ -516,7 +516,7 @@ cmd_install() {
         [[ "$(echo "$line" | sed 's/.*(\(.*\)).*/\1/')" != "$src" ]] && continue
         sk="${line#MISSING }"; sk="${sk%%[[:space:]](*}"
         echo ">>> npx -y skills add $src --skill $sk -g -y"
-        npx -y skills add "$src" --skill "$sk" -g -y || echo "FALLA add $sk — continuar con el resto"
+        npx -y skills add "$src" --skill "$sk" -g -y </dev/null || echo "FALLA add $sk — continuar con el resto"
       done <<< "$missing"
     done
   elif [[ -n $missing ]]; then
@@ -845,7 +845,7 @@ cmd_add() { # skillsync add <owner/repo> [--skill nombre] | add --from-file <arc
   done
   add_one() { # <repo>
     echo ">>> npx -y skills add $1 -g -y ${args[*]:-}"
-    if npx -y skills add "$1" -g -y ${args[@]+"${args[@]}"}; then
+    if npx -y skills add "$1" -g -y ${args[@]+"${args[@]}"} </dev/null; then
       python3 "$LIB/manifest.py" gen "$REPO"
     else
       echo "FALLA skills add $1"
