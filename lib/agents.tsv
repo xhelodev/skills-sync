@@ -11,3 +11,4 @@ cursor	~/.cursor	~/.cursor/skills	symlink
 codex	~/.codex	~/.codex/skills	symlink
 hermes	~/.hermes	~/.hermes/skills	symlink
 pi	~/.pi/agent	~/.pi/agent/settings.json	settings
+agy	~/.gemini/antigravity-cli	~/.gemini/config/skills	symlink
